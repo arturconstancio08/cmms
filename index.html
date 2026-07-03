@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REI Auto Parts · CMMS Manutenção (Gestão)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --bg2:#1e293b; --panel:#ffffff; --panel2:#f1f5f9;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --brand:#0e7490; --brand2:#0891b2; --accent:#155e75;
+    --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --info:#2563eb;
+    --mec:#7c3aed; --ele:#ea580c;
+    --shadow:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06);
+    --shadow-lg:0 10px 25px rgba(15,23,42,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);background:var(--panel2)}
+  a{color:var(--brand)}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none!important}
+
+  /* Layout */
+  #app{display:flex;min-height:100vh}
+  #sidebar{width:248px;background:linear-gradient(180deg,#0f172a,#152540);color:#cbd5e1;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:40;transition:transform .25s}
+  #sidebar .brand{padding:16px 16px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08)}
+  #nav{padding:10px 10px;flex:1;overflow:auto}
+  #nav .grp{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;padding:14px 12px 6px}
+  .navlink{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:#cbd5e1;font-size:14px;text-decoration:none;margin:2px 0;border:0;background:none;width:100%;text-align:left}
+  .navlink:hover{background:rgba(255,255,255,.06);color:#fff}
+  .navlink.active{background:var(--brand);color:#fff;font-weight:600}
+  .navlink .ic{width:18px;text-align:center;font-size:15px}
+  .navlink .badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:20px;font-size:11px;padding:1px 7px;font-weight:700}
+  #sidebar .foot{padding:12px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#64748b}
+
+  #main{flex:1;margin-left:248px;display:flex;flex-direction:column;min-width:0}
+  #topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:30}
+  #topbar h1{font-size:18px;margin:0;flex:1}
+  #burger{display:none;background:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:18px}
+  #content{padding:22px;max-width:1280px;width:100%}
+
+  /* Cards & generic */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px}
+  .card h3{margin:0 0 14px;font-size:15px}
+  .grid{display:grid;gap:16px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .lbl{font-size:12.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .kpi .val{font-size:30px;font-weight:800;margin-top:6px;line-height:1}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:6px}
+  .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:5px}
+  .kpi.k-open .bar{background:var(--info)} .kpi.k-exec .bar{background:var(--brand2)}
+  .kpi.k-done .bar{background:var(--ok)} .kpi.k-late .bar{background:var(--bad)}
+  .kpi.k-mttr .bar{background:var(--mec)} .kpi.k-back .bar{background:var(--warn)}
+
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1;min-width:280px}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 14px;border-radius:9px;font-size:13.5px;font-weight:600}
+  .btn:hover{background:var(--panel2)}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:var(--accent)}
+  .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+  .btn.warn{background:var(--warn);border-color:var(--warn);color:#fff}
+  .btn.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+  .btn.sm{padding:6px 10px;font-size:12.5px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--panel2);position:sticky;top:0}
+  tbody tr:hover{background:#f8fafc;cursor:pointer}
+  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+
+  /* Badges */
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .t-aberta{background:#dbeafe;color:#1e40af} .t-execucao{background:#cffafe;color:#0e7490}
+  .t-aguardando_peca{background:#fef9c3;color:#854d0e} .t-concluida{background:#dcfce7;color:#166534}
+  .t-cancelada{background:#f1f5f9;color:#475569} .t-late{background:#fee2e2;color:#991b1b}
+  .t-mecanica{background:#ede9fe;color:#5b21b6} .t-eletrica{background:#ffedd5;color:#9a3412}
+  .p-baixa{background:#f1f5f9;color:#475569}.p-media{background:#dbeafe;color:#1e40af}
+  .p-alta{background:#fef3c7;color:#92400e}.p-urgente{background:#fee2e2;color:#991b1b}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+  /* Forms */
+  label.f{display:block;font-size:12.5px;font-weight:600;color:#334155;margin:0 0 5px}
+  .field{margin-bottom:14px}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;background:#fff}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand2);box-shadow:0 0 0 3px rgba(8,145,178,.12)}
+  textarea{min-height:80px;resize:vertical}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px}
+
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;z-index:60;overflow:auto}
+  .modal{background:#fff;border-radius:16px;width:100%;max-width:760px;box-shadow:var(--shadow-lg);animation:pop .15s ease}
+  .modal.wide{max-width:920px}
+  @keyframes pop{from{transform:translateY(8px);opacity:.6}to{transform:none;opacity:1}}
+  .modal .mh{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .modal .mh h2{margin:0;font-size:17px;flex:1}
+  .modal .mb{padding:22px;max-height:70vh;overflow:auto}
+  .modal .mf{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+  .x{background:none;border:0;font-size:22px;color:var(--muted);line-height:1}
+
+  /* Alert duplicado */
+  .alert{border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:flex-start;font-size:13.5px}
+  .alert.dup{background:#fef2f2;border:1.5px solid #fecaca;color:#7f1d1d}
+  .alert .ai{font-size:22px;line-height:1}
+  .alert.info{background:#eff6ff;border:1.5px solid #bfdbfe;color:#1e3a8a}
+
+  /* Filters bar */
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px}
+  .filters .field{margin:0;min-width:150px}
+  .suglist{position:absolute;z-index:60;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px rgba(2,6,23,.14);max-height:290px;overflow:auto;margin-top:4px}
+  .sugitem{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
+  .sugitem:last-child{border-bottom:0}
+  .sugitem:hover{background:var(--panel2)}
+  .filters input,.filters select{padding:8px 10px}
+
+  /* Timeline */
+  .timeline{list-style:none;padding:0;margin:0}
+  .timeline li{position:relative;padding:0 0 14px 22px;border-left:2px solid var(--line)}
+  .timeline li:last-child{border-color:transparent}
+  .timeline li::before{content:"";position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--brand2)}
+  .timeline .tmeta{font-size:12px;color:var(--muted)}
+
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px;font-size:14px}
+  .detail-grid .dl{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .detail-grid .dv{font-weight:600;margin-bottom:8px}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px}
+  .empty .big{font-size:40px}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;box-shadow:var(--shadow-lg);z-index:80;font-size:14px;opacity:0;transition:opacity .2s,transform .2s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+  /* Marca / utilizador */
+  .logo-pill{background:#fff;border-radius:9px;padding:6px 10px;line-height:0;display:inline-flex;align-items:center}
+  .user-box{display:flex;align-items:center;gap:12px;font-size:13px}
+  .user-box .who{text-align:right;line-height:1.25}
+  .user-box .who b{font-size:14px}
+  .user-box .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--brand2),var(--mec));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+  .role-pill{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:20px}
+  .rp-gestor{background:#cffafe;color:#0e7490}
+
+  /* Cadastro de equipamento em abas */
+  .eqtabs{display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+  .eqtab{padding:9px 14px;border:0;background:none;font-size:13.5px;font-weight:700;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;cursor:pointer}
+  .eqtab:hover{color:var(--ink)}
+  .eqtab.active{color:var(--brand);border-bottom-color:var(--brand)}
+  .eqpane{display:none} .eqpane.active{display:block;animation:pop .12s ease}
+  .form-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+  @media(max-width:760px){.form-grid3{grid-template-columns:1fr}}
+  .secnote{font-size:12.5px;color:var(--accent);background:#ecfeff;border:1px solid #cffafe;border-radius:8px;padding:8px 11px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start}
+  .fldgroup-title{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:4px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .qrbox{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+  .qrbox #eqQR{padding:10px;background:#fff;border:1px solid var(--line);border-radius:10px}
+
+  /* Responsive */
+  @media(max-width:900px){
+    #sidebar{transform:translateX(-100%)}
+    #sidebar.open{transform:none}
+    #main{margin-left:0}
+    #burger{display:block}
+    .form-grid{grid-template-columns:1fr}
+    .detail-grid{grid-template-columns:1fr}
+  }
+
+  /* Print da folha de OS */
+  #printArea{display:none}
+  @media print{
+    body *{visibility:hidden}
+    #printArea,#printArea *{visibility:visible}
+    #printArea{display:block;position:absolute;left:0;top:0;width:100%;padding:0 6mm}
+  }
+  .sheet{font-size:12.5px;color:#000}
+  .sheet h2{margin:0;font-size:18px}
+  .sheet .sh{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}
+  .sheet table{font-size:12px}
+  .sheet th,.sheet td{border:1px solid #000;padding:6px}
+  .sheet .blk{border:1px solid #000;min-height:90px;padding:6px;margin-top:4px}
+  .sheet .sign{display:flex;gap:30px;margin-top:30px}
+  .sheet .sign div{flex:1;border-top:1px solid #000;text-align:center;padding-top:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand" id="brandBox"></div>
+    <nav id="nav"></nav>
+    <div class="foot">REI Auto Parts · CMMS Manutenção<br>Programa de Gestão · v6.0 (dados reais TOTVS) · <span id="yr"></span></div>
+  </aside>
+
+  <div id="main">
+    <header id="topbar">
+      <button id="burger" onclick="toggleSidebar()">☰</button>
+      <h1 id="pageTitle">Painel</h1>
+      <div class="user-box" id="userBox"></div>
+    </header>
+    <main id="content"></main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="printArea"></div>
+<div id="toast" class="toast"></div>
+
+<script src="DB_REI_dados.js"></script>
+<script>
+/* ===================== ESTADO E PERSISTÊNCIA ===================== */
+/* v5: base real do TOTVS carregada de DB_REI_dados.js (manter na mesma pasta).
+   O localStorage guarda APENAS as alterações locais (OS novas/editadas, equipamentos
+   editados, técnicos, numeração) — a base histórica fica no ficheiro de dados. */
+const LS_KEY = "rei_cmms_v5_real";
+let state = null;
+let ORIG = new Map(); // snapshot da base pristine (para gravar só o que mudou)
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+const GALPOES={FF1:"Fundição de Ferro (fase II)",FF2:"Fundição de Ferro (VICK)",FF3:"Fundição de Ferro (FBO X)",FA1:"Fundição de Aço (fase IV)",FAL1:"Fundição de Alumínio",FM1:"Fundição Manual e Alumínio (fase III)",US1:"Usinagem",US2:"Usinagem",AL1:"Almoxarifado",RE1:"Recepção",CM1:"Comercial",SG1:"Segurança",VEI:"Veículos"};
+function galpaoDoTag(tag){ const p=(tag||"").split(".")[0]; return GALPOES[p]||p||""; }
+
+const EST_DB=["concluida","cancelada","aberta","aberta"];
+const EST_DB_LBL=["Encerrada","Cancelada","Aberta Ordem","Aprovada"];
+
+function expandDB(){
+  const src=window.DB_REI||{equipamentos:[],ordens:[]};
+  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
+    familia:r[2]||"",centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
+    situacao:"Ativo",criticidade:"Y",status:"operando"}));
+  const idsEq=new Set(eqs.map(e=>e.id));
+  const catDe=new Map(eqs.map(e=>[e.id,tipoParaCategoria(e.tipoEquipto)||null]));
+  const ords=src.ordens.map(r=>{
+    const num=r[0],tag=r[1],desc=r[2],est=r[3],usu=r[4],dt=r[5];
+    const eid=tag?(idsEq.has("q_"+tag)?"q_"+tag:"x:"+tag):null;
+    const status=EST_DB[est]||"aberta";
+    return {id:"d"+num,db:true,numero:String(num),equipamentoId:eid,solicitante:usu||"",
+      tipo:"corretiva",prioridade:"media",categoria:status==="aberta"?null:(catDe.get(eid)||null),
+      status,tecnicoId:null,prazo:null,descricaoProblema:desc||"(sem descrição)",
+      dataAbertura:dt,dataInicio:null,dataConclusao:status==="concluida"?dt:null,
+      servicoExecutado:"",pecas:"",tempoGastoHoras:null,paradaHoras:null,
+      relacionadaA:null,observacoesGestor:"",
+      historico:[{data:dt,evento:"OS importada do TOTVS · estado original: "+(EST_DB_LBL[est]||"?"),usuario:usu||"TOTVS"}]};
+  });
+  return {eqs,ords};
+}
+
+function save(){
+  const changed=r=>!r.db||JSON.stringify(r)!==ORIG.get(r.id);
+  const persist={tecnicoAtual:state.tecnicoAtual,proximoNumero:state.proximoNumero,tecnicos:state.tecnicos,
+    equipamentos:state.equipamentos.filter(changed),ordens:state.ordens.filter(changed)};
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(persist)); }
+  catch(e){ toast("⚠️ Armazenamento do navegador cheio — exporte um backup em Backup & Dados."); }
+}
+
+function load(){
+  if(!window.DB_REI){ alert("⚠️ Ficheiro DB_REI_dados.js não encontrado.\nMantenha-o na mesma pasta deste HTML.\nO sistema vai abrir sem a base real."); }
+  const {eqs,ords}=expandDB();
+  normalizeEquipList(eqs);
+  ORIG=new Map();
+  eqs.forEach(e=>ORIG.set(e.id,JSON.stringify(e)));
+  ords.forEach(o=>ORIG.set(o.id,JSON.stringify(o)));
+  let persisted=null;
+  const raw=localStorage.getItem(LS_KEY);
+  if(raw){ try{ persisted=JSON.parse(raw); }catch(e){ persisted=null; } }
+  const mapE=new Map(eqs.map(e=>[e.id,e]));
+  const mapO=new Map(ords.map(o=>[o.id,o]));
+  if(persisted){
+    (persisted.equipamentos||[]).forEach(e=>mapE.set(e.id,e));
+    (persisted.ordens||[]).forEach(o=>mapO.set(o.id,o));
+  }
+  state={perfil:"gestor",
+    tecnicoAtual:(persisted&&persisted.tecnicoAtual)||"t1",
+    proximoNumero:(persisted&&persisted.proximoNumero)||1,
+    tecnicos:(persisted&&persisted.tecnicos&&persisted.tecnicos.length)?persisted.tecnicos:tecnicosPadrao(),
+    equipamentos:[...mapE.values()],
+    ordens:[...mapO.values()]};
+  // Programa de gestão: acesso direto como Gestor (sem tela de login)
+  state.currentUser = {perfil:"gestor", tecnicoId:null, nome:"Gestor da Manutenção"};
+  normalizeEquip();
+}
+
+/* ---- Padrão de cadastro (estilo TOTVS CD0910) + melhorias ---- */
+const SITUACOES=["Ativo","Suspenso","Vendido","Inutilizado"];
+const TIPOS_EQUIP=["","Elétrico","Mecânico","Hidráulico","Pneumático","Eletrônico","Instrumental","Ferramental","Veículo","Operatriz","Outros","Outro"];
+const CRIT={X:{label:"X — Crítico",sla:1,cls:"p-urgente"},Y:{label:"Y — Médio",sla:3,cls:"p-alta"},Z:{label:"Z — Baixo",sla:7,cls:"p-baixa"}};
+function critTag(c){ const k=CRIT[c]; return k?`<span class="tag ${k.cls}" title="${k.label}">${c}</span>`:`<span class="tag p-baixa">—</span>`; }
+function slaDias(c){ return CRIT[c]?CRIT[c].sla:null; }
+function tipoParaCategoria(t){ if(!t)return ""; if(/el[eé]tric|eletr[oô]nic/i.test(t))return "eletrica"; if(/mec[âa]nic|hidr[áa]ulic|pneum[áa]tic/i.test(t))return "mecanica"; return ""; }
+function normalizeEquip(){ normalizeEquipList(state.equipamentos||[]); }
+function normalizeEquipList(list){
+  (list||[]).forEach(e=>{
+    const m={alta:"X",media:"Y",baixa:"Z"};
+    if(m[e.criticidade]) e.criticidade=m[e.criticidade];
+    if(!["X","Y","Z"].includes(e.criticidade)) e.criticidade="Y";
+    if(e.tipoEquipto===undefined||e.tipoEquipto==="") e.tipoEquipto=/painel|el[eé]tric|inversor|motor|bateria|disjuntor|el[eé]tron/i.test((e.nome||"")+(e.tag||""))?"Elétrico":"Mecânico";
+    const d={empresa:"REI Auto Parts Indústria e Comércio Ltda",bem:"",contaPatrimonial:"",estabelecimento:"200",grupoMaquina:"",familia:e.familia||"",planejador:"",situacao:"Ativo",dataAltSituacao:"",
+      dataAquisicao:"",dataAtivacao:"",notaFiscal:"",serie:"",valorAquisicao:"",fornecedor:"",fabricante:"",assistTecnica:"",desenho:"",revisao:"",tipoContador:"",equipamentoProdutivo:true,calendario:"Produção",
+      calcUtilizacao:"Histórico",tipoApontamento:"Contador",fatorConversao:"1,0000",rateio:"100,00",contador:0,intervaloPreventiva:0,ultPrevContador:0,imagem:"",observacoes:""};
+    for(const k in d){ if(e[k]===undefined) e[k]=d[k]; }
+    if(e.status===undefined) e.status="operando";
+  });
+}
+
+const STATUS = {
+  aberta:{label:"Aberta (aguardando triagem)", short:"Aberta"},
+  execucao:{label:"Em execução", short:"Execução"},
+  aguardando_peca:{label:"Aguardando peça", short:"Aguard. peça"},
+  concluida:{label:"Concluída", short:"Concluída"},
+  cancelada:{label:"Cancelada", short:"Cancelada"}
+};
+const ATIVAS = ["aberta","execucao","aguardando_peca"];
+const PRIORIDADES = {baixa:"Baixa",media:"Média",alta:"Alta",urgente:"Urgente"};
+const TIPOS = {corretiva:"Corretiva",preventiva:"Preventiva",preditiva:"Preditiva",melhoria:"Melhoria"};
+const CATEGORIAS = {mecanica:"Mecânica",eletrica:"Elétrica"};
+
+/* ===================== EQUIPA TÉCNICA (padrão) ===================== */
+function tecnicosPadrao(){
+  return [
+    {id:"t1",nome:"Manoel",equipe:"mecanica",lider:true},
+    {id:"t2",nome:"Marciel",equipe:"mecanica",lider:false},
+    {id:"t3",nome:"Leandro",equipe:"mecanica",lider:false},
+    {id:"t4",nome:"Rafael",equipe:"mecanica",lider:false},
+    {id:"t5",nome:"Marcão",equipe:"mecanica",lider:false},
+    {id:"t6",nome:"Geovane",equipe:"mecanica",lider:false},
+    {id:"t7",nome:"Eduardo",equipe:"eletrica",lider:true},
+    {id:"t8",nome:"Beto",equipe:"eletrica",lider:false},
+    {id:"t9",nome:"Zetim",equipe:"eletrica",lider:false},
+    {id:"t10",nome:"Cebola",equipe:"eletrica",lider:false},
+    {id:"t11",nome:"Evandro",equipe:"eletrica",lider:false},
+    {id:"t12",nome:"Jonathan",equipe:"eletrica",lider:false},
+  ];
+}
+
+/* ===================== HELPERS ===================== */
+function equip(id){
+  const f=state.equipamentos.find(e=>e.id===id);
+  if(f) return f;
+  const code=(typeof id==="string"&&id.indexOf("x:")===0)?id.slice(2):null;
+  return {id:id||"",tag:code||"—",nome:code?"(local/setor sem cadastro)":"(sem equipamento)",setor:code?galpaoDoTag(code):"—",criticidade:"Y",tipoEquipto:"",situacao:"—",status:"operando"};
+}
+function tec(id){ return state.tecnicos.find(t=>t.id===id); }
+function ordemById(id){ return state.ordens.find(o=>o.id===id); }
+function isActive(o){ return ATIVAS.includes(o.status); }
+function isOverdue(o){ return o.prazo && isActive(o) && o.prazo < todayStr(); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmt(dstr){ if(!dstr) return "—"; const p=dstr.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+function nextNumero(){ const num="OS-2026-"+String(state.proximoNumero).padStart(4,"0"); state.proximoNumero++; return num; }
+function addHist(o,evento,usuario){ o.historico.push({data:todayStr(),evento,usuario:usuario||"Gestor"}); }
+
+function statusTag(o){
+  if(isOverdue(o)) return `<span class="tag t-late">⏰ Atrasada</span>`;
+  return `<span class="tag t-${o.status}">${STATUS[o.status].short}</span>`;
+}
+function catTag(c){ return c?`<span class="tag t-${c}">${CATEGORIAS[c]}</span>`:`<span class="tag t-cancelada">a definir</span>`; }
+function prioTag(p){ return `<span class="tag p-${p}">${PRIORIDADES[p]}</span>`; }
+
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* ===================== LOGÓTIPO ===================== */
+/* Usa logo-rei.png (oficial) se estiver na mesma pasta do ficheiro; senão mostra recriação SVG */
+function logoFallbackSVG(){
+  return `<svg viewBox="0 0 250 78" width="140" height="44" xmlns="http://www.w3.org/2000/svg" aria-label="REI Auto Parts">
+    <path d="M44 6 q20 0 20 21 q0 17 -16 20 l0 -13 q5 -1 5 -7 q0 -7 -8 -7 l-9 0 0 42 -13 0 0 -49 z" fill="#1CA9E0"/>
+    <path d="M14 50 l13 0 0 22 -13 0 z" fill="#1CA9E0"/>
+    <path d="M30 50 l14 22 -14 0 z" fill="#0f172a"/>
+    <text x="86" y="50" font-family="Arial Black,Arial,sans-serif" font-size="50" font-weight="900" fill="#0f172a">REI</text>
+    <rect x="87" y="58" width="150" height="18" rx="3" fill="none" stroke="#1CA9E0" stroke-width="2.4"/>
+    <text x="94" y="72" font-family="Arial,sans-serif" font-size="13" font-weight="800" letter-spacing="1" fill="#0f172a">AUTO <tspan fill="#1CA9E0">PARTS</tspan></text>
+  </svg>`;
+}
+function mountLogo(boxId,h){
+  const box=document.getElementById(boxId); if(!box)return;
+  const img=new Image(); img.alt="REI Auto Parts"; img.style.height=h+"px"; img.style.display="block";
+  img.onerror=()=>{box.innerHTML=logoFallbackSVG();};
+  img.onload=()=>{box.innerHTML="";box.appendChild(img);};
+  img.src="logo-rei.png";
+}
+
+/* ===================== NAVEGAÇÃO ===================== */
+const NAV = [
+  {grp:"Operação"},
+  {id:"dashboard",icon:"📊",label:"Painel",roles:["gestor"]},
+  {id:"ordens",icon:"📋",label:"Ordens de Serviço",roles:["gestor"]},
+  {id:"triagem",icon:"🔎",label:"Triagem",roles:["gestor"],badge:()=>state.ordens.filter(o=>o.status==="aberta").length},
+  {id:"nova",icon:"➕",label:"Registar OS (interno)",roles:["gestor"]},
+  {grp:"Cadastros"},
+  {id:"equipamentos",icon:"⚙️",label:"Equipamentos",roles:["gestor"]},
+  {id:"tecnicos",icon:"👷",label:"Equipa Técnica",roles:["gestor"]},
+  {grp:"Gestão"},
+  {id:"relatorios",icon:"📈",label:"Relatórios",roles:["gestor"]},
+  {id:"config",icon:"💾",label:"Backup & Dados",roles:["gestor"]},
+];
+let currentView = "dashboard";
+
+function buildNav(){
+  const nav=document.getElementById("nav"); nav.innerHTML="";
+  let pendingGrp=null;
+  NAV.forEach(item=>{
+    if(item.grp){ pendingGrp=item.grp; return; }
+    if(!item.roles.includes(state.perfil)) return;
+    if(pendingGrp){ const g=document.createElement("div");g.className="grp";g.textContent=pendingGrp;nav.appendChild(g);pendingGrp=null; }
+    const b=document.createElement("button");
+    b.className="navlink"+(currentView===item.id?" active":"");
+    let badge=""; if(item.badge){const c=item.badge();if(c>0)badge=`<span class="badge">${c}</span>`;}
+    b.innerHTML=`<span class="ic">${item.icon}</span><span>${item.label}</span>${badge}`;
+    b.onclick=()=>{ currentView=item.id; closeSidebar(); render(); };
+    nav.appendChild(b);
+  });
+}
+function renderBrand(){
+  const b=document.getElementById("brandBox"); if(!b)return;
+  b.innerHTML=`<div class="logo-pill" id="brandLogo"></div><div style="margin-left:auto;font-size:18px" title="Brasil">🇧🇷</div>`;
+  mountLogo("brandLogo",30);
+}
+function renderUserBox(){
+  const box=document.getElementById("userBox"); if(!box)return;
+  box.innerHTML=`<div class="who"><b>Gestor da Manutenção</b><br><span class="role-pill rp-gestor">Gestão</span></div><div class="av">G</div>`;
+}
+function toggleSidebar(){ document.getElementById("sidebar").classList.toggle("open"); }
+function closeSidebar(){ document.getElementById("sidebar").classList.remove("open"); }
+
+/* ===================== RENDER PRINCIPAL ===================== */
+const TITLES={dashboard:"Painel de Manutenção",ordens:"Ordens de Serviço",nova:"Registar Ordem de Serviço",triagem:"Triagem de Solicitações",equipamentos:"Equipamentos",tecnicos:"Equipa Técnica",relatorios:"Relatórios e Indicadores",config:"Backup & Dados"};
+
+function render(){
+  const allowed=NAV.find(n=>n.id===currentView);
+  if(!allowed) currentView="dashboard";
+  renderBrand(); renderUserBox(); buildNav();
+  document.getElementById("pageTitle").textContent=TITLES[currentView]||"Painel";
+  const c=document.getElementById("content");
+  ({dashboard:viewDashboard,ordens:viewOrdens,nova:viewNova,triagem:viewTriagem,equipamentos:viewEquipamentos,tecnicos:viewTecnicos,relatorios:viewRelatorios,config:viewConfig}[currentView]||viewDashboard)(c);
+}
+
+/* ===================== DASHBOARD ===================== */
+let charts={};
+function destroyCharts(){ Object.values(charts).forEach(c=>c&&c.destroy()); charts={}; }
+
+let dashPeriodo={ano:"",mes:""};
+const MESES_LBL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function dashFiltrar(){ dashPeriodo={ano:val("dAno"),mes:val("dMes")}; render(); }
+function dashLimpar(){ dashPeriodo={ano:"",mes:""}; render(); }
+function irParaOrdensEquip(id){ filtros={busca:"",status:"",categoria:"",equip:id}; ordensLimit=200; currentView="ordens"; render(); }
+function viewDashboard(c){
+  destroyCharts();
+  const anos=[...new Set(state.ordens.map(o=>(o.dataAbertura||"").slice(0,4)).filter(Boolean))].sort();
+  const periodoAtivo=!!(dashPeriodo.ano||dashPeriodo.mes);
+  const O=state.ordens.filter(o=>{
+    if(dashPeriodo.ano&&(o.dataAbertura||"").slice(0,4)!==dashPeriodo.ano)return false;
+    if(dashPeriodo.mes&&(o.dataAbertura||"").slice(5,7)!==dashPeriodo.mes)return false;
+    return true;
+  });
+  const abertas=O.filter(o=>o.status==="aberta").length;
+  const exec=O.filter(o=>o.status==="execucao"||o.status==="aguardando_peca").length;
+  const concl=O.filter(o=>o.status==="concluida");
+  const atrasadas=O.filter(isOverdue).length;
+  const backlog=O.filter(isActive).length;
+  const comTempo=concl.filter(o=>o.dataInicio&&o.dataConclusao);
+  const mttr = comTempo.length? (comTempo.reduce((s,o)=>s+Math.max(daysBetween(o.dataInicio,o.dataConclusao),0)*24,0)/comTempo.length) : 0;
+  const concComPrazo=concl.filter(o=>o.prazo&&o.dataConclusao);
+  const noPrazo=concComPrazo.filter(o=>o.dataConclusao<=o.prazo).length;
+  const taxaPrazo=concComPrazo.length? Math.round(noPrazo/concComPrazo.length*100):100;
+
+  c.innerHTML=`
+    <div class="card" style="margin-bottom:14px;padding:12px 14px">
+      <div class="filters">
+        <div class="field"><label class="f">Ano</label><select id="dAno" onchange="dashFiltrar()"><option value="">Todos</option>${anos.map(a=>`<option value="${a}"${dashPeriodo.ano===a?" selected":""}>${a}</option>`).join("")}</select></div>
+        <div class="field"><label class="f">Mês</label><select id="dMes" onchange="dashFiltrar()"><option value="">Todos</option>${MESES_LBL.map((m,i)=>{const v=String(i+1).padStart(2,"0");return `<option value="${v}"${dashPeriodo.mes===v?" selected":""}>${m}</option>`;}).join("")}</select></div>
+        ${periodoAtivo?`<button class="btn sm" onclick="dashLimpar()">✕ Limpar período</button>`:""}
+        <span class="hint" style="align-self:center"><b>${O.length}</b> OS ${periodoAtivo?"no período selecionado":"no histórico completo"} — todos os indicadores abaixo respeitam este filtro</span>
+      </div>
+    </div>
+    <div class="grid kpis" style="margin-bottom:18px">
+      <div class="kpi k-open" style="cursor:pointer" title="Ver OS abertas" onclick="irParaOrdens('aberta')"><div class="bar"></div><div class="lbl">Abertas ›</div><div class="val">${abertas}</div><div class="sub">aguardando triagem</div></div>
+      <div class="kpi k-exec" style="cursor:pointer" title="Ver OS em execução" onclick="irParaOrdens('emexec')"><div class="bar"></div><div class="lbl">Em execução ›</div><div class="val">${exec}</div><div class="sub">incl. aguardando peça</div></div>
+      <div class="kpi k-late" style="cursor:pointer" title="Ver OS atrasadas" onclick="irParaOrdens('atrasada')"><div class="bar"></div><div class="lbl">Atrasadas ›</div><div class="val">${atrasadas}</div><div class="sub">prazo vencido</div></div>
+      <div class="kpi k-done" style="cursor:pointer" title="Ver OS concluídas" onclick="irParaOrdens('concluida')"><div class="bar"></div><div class="lbl">Concluídas ›</div><div class="val">${concl.length}</div><div class="sub">${periodoAtivo?"no período":"total histórico"}</div></div>
+      <div class="kpi k-back" style="cursor:pointer" title="Ver OS ativas (backlog)" onclick="irParaOrdens('ativas')"><div class="bar"></div><div class="lbl">Backlog ›</div><div class="val">${backlog}</div><div class="sub">OS ativas em aberto</div></div>
+      <div class="kpi k-mttr"><div class="bar"></div><div class="lbl">MTTR médio</div><div class="val">${mttr.toFixed(1)}h</div><div class="sub">tempo médio de reparo</div></div>
+    </div>
+    <div class="row" style="margin-bottom:16px">
+      <div class="col card"><h3>Tendência ${dashPeriodo.ano?"("+dashPeriodo.ano+")":"(últimos 6 meses)"}: abertas vs concluídas</h3><canvas id="chTrend" height="120"></canvas></div>
+    </div>
+    <div class="row" style="margin-bottom:16px">
+      <div class="col card"><h3>Por situação</h3><canvas id="chStatus" height="170"></canvas></div>
+      <div class="col card"><h3>Por equipa</h3><canvas id="chEquipe" height="170"></canvas></div>
+      <div class="col card"><h3>Cumprimento de prazo</h3>
+        <div style="display:flex;align-items:center;gap:18px">
+          <div style="width:150px;height:150px;position:relative;flex:0 0 auto"><canvas id="chPrazo"></canvas></div>
+          <div><div style="font-size:34px;font-weight:800;color:var(--ok)">${taxaPrazo}%</div>
+          <div class="sub" style="color:var(--muted);font-size:13px">${noPrazo} de ${concComPrazo.length} concluídas no prazo</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col card"><h3>Top equipamentos por nº de OS <span class="hint" style="font-weight:400;font-size:12px">— clique na barra para abrir as OS do equipamento</span></h3><canvas id="chEquip" height="160"></canvas></div>
+      <div class="col card">
+        <h3>⏰ OS atrasadas — ação necessária</h3>
+        <div id="lateList"></div>
+      </div>
+    </div>`;
+
+  const late=O.filter(isOverdue).sort((a,b)=>a.prazo.localeCompare(b.prazo));
+  document.getElementById("lateList").innerHTML = late.length? `<div class="table-wrap"><table><thead><tr><th>OS</th><th>Equipamento</th><th>Prazo</th><th>Resp.</th></tr></thead><tbody>${late.map(o=>`<tr onclick="openOrdem('${o.id}')"><td><b>${o.numero}</b></td><td>${equip(o.equipamentoId).nome}</td><td><span class="tag t-late">${fmt(o.prazo)}</span></td><td>${o.tecnicoId?tec(o.tecnicoId).nome:"—"}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty"><div class="big">✅</div>Nenhuma OS atrasada. Bom trabalho!</div>`;
+
+  charts.status=new Chart(document.getElementById("chStatus"),{type:"doughnut",
+    data:{labels:["Aberta","Execução","Aguard. peça","Concluída","Cancelada"],
+      datasets:[{data:["aberta","execucao","aguardando_peca","concluida","cancelada"].map(s=>O.filter(o=>o.status===s).length),
+      backgroundColor:["#2563eb","#0891b2","#d97706","#16a34a","#94a3b8"]}]},
+    options:{plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}}}});
+
+  charts.equipe=new Chart(document.getElementById("chEquipe"),{type:"bar",
+    data:{labels:["Mecânica","Elétrica","A definir"],
+      datasets:[{label:"OS",data:[O.filter(o=>o.categoria==="mecanica").length,O.filter(o=>o.categoria==="eletrica").length,O.filter(o=>!o.categoria).length],
+      backgroundColor:["#7c3aed","#ea580c","#cbd5e1"]}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+
+  charts.prazo=new Chart(document.getElementById("chPrazo"),{type:"doughnut",
+    data:{labels:["No prazo","Fora do prazo"],datasets:[{data:[noPrazo,concComPrazo.length-noPrazo],backgroundColor:["#16a34a","#dc2626"]}]},
+    options:{cutout:"68%",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+
+  const cont={}; O.forEach(o=>{if(!o.equipamentoId)return;cont[o.equipamentoId]=(cont[o.equipamentoId]||0)+1;});
+  const top=Object.entries(cont).map(([id,v])=>({id,tag:equip(id).tag,nomeEq:equip(id).nome,v})).sort((a,b)=>b.v-a.v).slice(0,8);
+  charts.equip=new Chart(document.getElementById("chEquip"),{type:"bar",
+    data:{labels:top.map(t=>t.tag),datasets:[{label:"Nº de OS",data:top.map(t=>t.v),backgroundColor:"#0e7490"}]},
+    options:{indexAxis:"y",
+      onClick:(ev,items)=>{if(items&&items.length){const t=top[items[0].index];if(t)irParaOrdensEquip(t.id);}},
+      onHover:(ev,items)=>{const tg=ev&&ev.native&&ev.native.target;if(tg)tg.style.cursor=(items&&items.length)?"pointer":"default";},
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:(it)=>{const t=top[it[0].dataIndex];return t.tag+" — "+t.nomeEq;},afterLabel:()=>"🔎 clique para ver as OS"}}},
+      scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+
+  const months=[]; const now=new Date();
+  if(dashPeriodo.ano){
+    const y=+dashPeriodo.ano; const lastM=(y===now.getFullYear())?now.getMonth()+1:12;
+    for(let mth=1;mth<=lastM;mth++){const dt=new Date(y,mth-1,1);months.push({key:dashPeriodo.ano+"-"+String(mth).padStart(2,"0"),label:dt.toLocaleDateString("pt-BR",{month:"short"})});}
+  }else{
+    for(let i=5;i>=0;i--){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:dt.toISOString().slice(0,7),label:dt.toLocaleDateString("pt-BR",{month:"short"})+"/"+String(dt.getFullYear()).slice(2)});}
+  }
+  const OTrend=state.ordens.filter(o=>!dashPeriodo.ano||(o.dataAbertura||"").slice(0,4)===dashPeriodo.ano);
+  const abertasM=months.map(m=>OTrend.filter(o=>o.dataAbertura&&o.dataAbertura.slice(0,7)===m.key).length);
+  const conclM=months.map(m=>OTrend.filter(o=>o.dataConclusao&&o.dataConclusao.slice(0,7)===m.key).length);
+  charts.trend=new Chart(document.getElementById("chTrend"),{type:"line",
+    data:{labels:months.map(m=>m.label),datasets:[
+      {label:"Abertas",data:abertasM,borderColor:"#2563eb",backgroundColor:"rgba(37,99,235,.1)",tension:.3,fill:true},
+      {label:"Concluídas",data:conclM,borderColor:"#16a34a",backgroundColor:"rgba(22,163,74,.1)",tension:.3,fill:true}]},
+    options:{plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+
+/* ===================== LISTA DE ORDENS ===================== */
+let filtros={busca:"",status:"",categoria:"",equip:""};
+function viewOrdens(c){
+  destroyCharts();
+  c.innerHTML=`
+    <div class="filters card" style="padding:14px">
+      <div class="field"><label class="f">Buscar</label><input id="fBusca" placeholder="Nº, problema, solicitante..." value="${filtros.busca}"></div>
+      <div class="field"><label class="f">Situação</label><select id="fStatus">
+        <option value="">Todas</option>${Object.keys(STATUS).map(s=>`<option value="${s}">${STATUS[s].short}</option>`).join("")}
+        <option value="emexec">Em execução (todas)</option>
+        <option value="ativas">Ativas (backlog)</option>
+        <option value="atrasada">Atrasadas</option></select></div>
+      <div class="field"><label class="f">Categoria</label><select id="fCat"><option value="">Todas</option><option value="mecanica">Mecânica</option><option value="eletrica">Elétrica</option><option value="none">A definir</option></select></div>
+      <div class="field"><label class="f">Equipamento</label><select id="fEquip"><option value="">Todos</option>${filtros.equip&&!state.equipamentos.some(e=>e.id===filtros.equip)?`<option value="${filtros.equip}">${equip(filtros.equip).tag} · ${equip(filtros.equip).nome}</option>`:""}${state.equipamentos.map(e=>`<option value="${e.id}">${e.tag} · ${e.nome}</option>`).join("")}</select></div>
+      <button class="btn" onclick="aplicarFiltros()">Filtrar</button>
+      <button class="btn" onclick="limparFiltros()">Limpar</button>
+    </div>
+    <div id="ordensTable"></div>`;
+  document.getElementById("fStatus").value=filtros.status;
+  document.getElementById("fCat").value=filtros.categoria;
+  document.getElementById("fEquip").value=filtros.equip;
+  renderOrdensTable();
+}
+function irParaOrdens(status){ filtros={busca:"",status:status||"",categoria:"",equip:""}; currentView="ordens"; render(); }
+function aplicarFiltros(){filtros={busca:document.getElementById("fBusca").value.toLowerCase(),status:document.getElementById("fStatus").value,categoria:document.getElementById("fCat").value,equip:document.getElementById("fEquip").value};ordensLimit=200;renderOrdensTable();}
+function limparFiltros(){filtros={busca:"",status:"",categoria:"",equip:""};viewOrdens(document.getElementById("content"));}
+function filtraOrdens(){
+  return state.ordens.filter(o=>{
+    if(filtros.busca){const s=(o.numero+" "+o.descricaoProblema+" "+(o.solicitante||"")+" "+equip(o.equipamentoId).nome).toLowerCase();if(!s.includes(filtros.busca))return false;}
+    if(filtros.status==="atrasada"){if(!isOverdue(o))return false;}
+    else if(filtros.status==="ativas"){if(!isActive(o))return false;}
+    else if(filtros.status==="emexec"){if(!(o.status==="execucao"||o.status==="aguardando_peca"))return false;}
+    else if(filtros.status){if(o.status!==filtros.status)return false;}
+    if(filtros.categoria==="none"){if(o.categoria)return false;} else if(filtros.categoria){if(o.categoria!==filtros.categoria)return false;}
+    if(filtros.equip&&o.equipamentoId!==filtros.equip)return false;
+    return true;
+  }).sort((a,b)=>b.dataAbertura.localeCompare(a.dataAbertura)||b.numero.localeCompare(a.numero));
+}
+let ordensLimit=200;
+function maisOrdens(){ ordensLimit+=300; renderOrdensTable(); }
+function renderOrdensTable(){
+  const listAll=filtraOrdens();
+  const list=listAll.slice(0,ordensLimit);
+  const el=document.getElementById("ordensTable");
+  if(!listAll.length){el.innerHTML=`<div class="card empty"><div class="big">📭</div>Nenhuma ordem encontrada com estes filtros.</div>`;return;}
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>OS</th><th>Equipamento</th><th>Problema</th><th>Categoria</th><th>Prioridade</th><th>Situação</th><th>Responsável</th><th>Aberta</th><th>Prazo</th></tr></thead><tbody>
+    ${list.map(o=>`<tr onclick="openOrdem('${o.id}')">
+      <td><b>${o.numero}</b></td>
+      <td>${equip(o.equipamentoId).tag}<br><span class="hint">${equip(o.equipamentoId).nome}</span></td>
+      <td style="max-width:260px">${o.descricaoProblema.slice(0,90)}${o.descricaoProblema.length>90?"…":""}</td>
+      <td>${catTag(o.categoria)}</td>
+      <td>${prioTag(o.prioridade)}</td>
+      <td>${statusTag(o)}</td>
+      <td>${o.tecnicoId?tec(o.tecnicoId).nome:"—"}</td>
+      <td>${fmt(o.dataAbertura)}</td>
+      <td>${o.prazo?(isOverdue(o)?`<span class="tag t-late">${fmt(o.prazo)}</span>`:fmt(o.prazo)):"—"}</td>
+    </tr>`).join("")}
+  </tbody></table></div><div class="hint" style="margin-top:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span>${listAll.length} ordem(ns)${listAll.length>list.length?` · mostrando as ${list.length} primeiras`:""} · clique numa linha para ver detalhes</span>
+    ${listAll.length>list.length?`<button class="btn sm" onclick="maisOrdens()">Mostrar mais 300</button>`:""}</div>`;
+}
+
+/* ===================== REGISTAR OS (INTERNO/GESTOR) + ALERTA DUPLICADOS ===================== */
+function viewNova(c){
+  destroyCharts();
+  c.innerHTML=`
+  <div class="row">
+    <div class="col card" style="max-width:640px">
+      <h3>➕ Registar Ordem de Serviço (uso interno)</h3>
+      <p class="hint" style="margin-top:0">Para solicitações de operadores, use o <b>Portal de Abertura de OS</b> (ficheiro separado). Este formulário serve para o gestor registar um chamado recebido por telefone/rádio.</p>
+      <div class="field" style="position:relative"><label class="f">Equipamento * <span class="hint">(${state.equipamentos.length} cadastrados — digite para buscar)</span></label>
+        <input id="nEquipBusca" placeholder="Digite TAG, descrição, setor ou família..." autocomplete="off" oninput="eqSugestoes()" onfocus="eqSugestoes()">
+        <input type="hidden" id="nEquip">
+        <div id="eqSugList" class="suglist" style="display:none"></div>
+      </div>
+      <div id="dupAlert"></div>
+      <div class="field"><label class="f">Descrição do problema *</label><textarea id="nDesc" placeholder="Descreva o que está acontecendo, sintomas, quando começou..."></textarea></div>
+      <div class="form-grid">
+        <div class="field"><label class="f">Tipo de manutenção</label><select id="nTipo">${Object.keys(TIPOS).map(t=>`<option value="${t}">${TIPOS[t]}</option>`).join("")}</select></div>
+        <div class="field"><label class="f">Solicitante *</label><input id="nSolic" placeholder="Quem solicitou"></div>
+      </div>
+      <div class="hint">A categoria (mecânica/elétrica), prioridade e o técnico responsável são definidos na triagem.</div>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn primary" id="btnCriar" onclick="criarOrdem()">Registar Ordem de Serviço</button>
+      </div>
+    </div>
+    <div class="col card" style="max-width:380px;align-self:flex-start">
+      <h3>ℹ️ Como funciona</h3>
+      <p style="font-size:13.5px;color:#475569;line-height:1.6">Ao escolher o equipamento, o sistema <b>verifica automaticamente</b> se já existe uma OS ativa para ele. Se existir, mostra um <b>alerta</b> para evitar abrir uma ordem duplicada do mesmo problema.</p>
+      <p style="font-size:13.5px;color:#475569;line-height:1.6">Pode então <b>ver a OS existente</b>, ou registar mesmo assim (com justificação, vinculando à ordem original).</p>
+    </div>
+  </div>`;
+}
+function eqSugestoes(){
+  const inp=document.getElementById("nEquipBusca"),box=document.getElementById("eqSugList");
+  const q=inp.value.trim().toLowerCase();
+  document.getElementById("nEquip").value="";document.getElementById("dupAlert").innerHTML="";
+  if(q.length<2){box.style.display="none";box.innerHTML="";return;}
+  const res=state.equipamentos.filter(e=>((e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")).toLowerCase().includes(q)).slice(0,30);
+  if(!res.length){box.innerHTML=`<div class="sugitem" style="cursor:default;color:var(--muted)">Nenhum equipamento encontrado.</div>`;box.style.display="block";return;}
+  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tag}</b> · ${e.nome}<br><span class="hint">${e.setor||"—"} · ${e.familia||"—"}</span></div>`).join("");
+  box.style.display="block";
+}
+function eqEscolher(id){
+  const e=equip(id);
+  document.getElementById("nEquip").value=id;
+  document.getElementById("nEquipBusca").value=e.tag+" · "+e.nome;
+  document.getElementById("eqSugList").style.display="none";
+  checarDuplicada();
+}
+function ordensAtivasDoEquip(eid){ return state.ordens.filter(o=>o.equipamentoId===eid && isActive(o)); }
+function checarDuplicada(){
+  const eid=document.getElementById("nEquip").value;
+  const box=document.getElementById("dupAlert");
+  if(!eid){box.innerHTML="";return;}
+  const ativas=ordensAtivasDoEquip(eid);
+  if(!ativas.length){box.innerHTML=`<div class="alert info"><div class="ai">✅</div><div>Não há ordens ativas para este equipamento. Pode prosseguir.</div></div>`;return;}
+  box.innerHTML=`<div class="alert dup"><div class="ai">⚠️</div><div style="flex:1">
+    <b>Atenção: já existe ${ativas.length} ordem(ns) ativa(s) para este equipamento!</b>
+    <div style="margin-top:8px">${ativas.map(o=>`<div style="background:#fff;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b>${o.numero}</b> ${statusTag(o)} ${prioTag(o.prioridade)}
+      <span style="flex:1;min-width:160px;font-size:12.5px;color:#7f1d1d">${o.descricaoProblema.slice(0,80)}</span>
+      <button class="btn sm" onclick="openOrdem('${o.id}')">Ver OS</button>
+    </div>`).join("")}</div>
+    <div style="margin-top:10px;font-size:12.5px">Verifique se o problema não é o mesmo. Se for diferente, marque abaixo para registar mesmo assim.</div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px"><input type="checkbox" id="nForce" style="width:auto" onchange="document.getElementById('nJust').classList.toggle('hidden',!this.checked)"> É um problema diferente — registar nova OS mesmo assim</label>
+    <div id="nJust" class="hidden field" style="margin-top:8px"><input id="nJustText" placeholder="Justificação (ex.: problema diferente do já reportado)"></div>
+  </div></div>`;
+}
+function criarOrdem(){
+  const eid=document.getElementById("nEquip").value;
+  const desc=document.getElementById("nDesc").value.trim();
+  const solic=document.getElementById("nSolic").value.trim();
+  if(!eid||!desc||!solic){toast("Preencha equipamento, problema e solicitante.");return;}
+  const ativas=ordensAtivasDoEquip(eid);
+  let relacionada=null;
+  if(ativas.length){
+    const force=document.getElementById("nForce");
+    if(!force||!force.checked){toast("⚠️ Já existe OS ativa. Confirme que é um problema diferente para prosseguir.");return;}
+    relacionada=ativas[0].id;
+  }
+  const o={
+    id:uid(), numero:nextNumero(), equipamentoId:eid, solicitante:solic,
+    descricaoProblema:desc, tipo:document.getElementById("nTipo").value, prioridade:"media",
+    categoria:null, status:"aberta", tecnicoId:null, prazo:null,
+    dataAbertura:todayStr(), dataInicio:null, dataConclusao:null,
+    servicoExecutado:"", pecas:"", tempoGastoHoras:null, paradaHoras:null,
+    relacionadaA:relacionada, observacoesGestor:"",
+    historico:[{data:todayStr(),evento:"OS registada pelo gestor"+(relacionada?" (vinculada a OS ativa existente)":""),usuario:solic}]
+  };
+  state.ordens.push(o); save();
+  toast("✅ "+o.numero+" registada com sucesso!");
+  currentView="ordens"; render();
+}
+
+/* ===================== TRIAGEM ===================== */
+function viewTriagem(c){
+  destroyCharts();
+  const fila=state.ordens.filter(o=>o.status==="aberta").sort((a,b)=>{const pr={urgente:0,alta:1,media:2,baixa:3};return pr[a.prioridade]-pr[b.prioridade]||a.dataAbertura.localeCompare(b.dataAbertura);});
+  c.innerHTML=`<div class="card"><h3>🔎 Solicitações aguardando triagem (${fila.length})</h3>
+    ${fila.length?`<div class="hint" style="margin-bottom:12px">Confira cada solicitação, defina categoria, prioridade, prazo e atribua a um técnico.</div>
+    <div class="table-wrap"><table><thead><tr><th>OS</th><th>Equipamento</th><th>Problema</th><th>Prioridade</th><th>Aberta</th><th></th></tr></thead><tbody>
+    ${fila.map(o=>`<tr><td><b>${o.numero}</b>${o.relacionadaA?` <span class="tag t-late" title="Vinculada a OS existente">🔗</span>`:""}</td>
+      <td>${equip(o.equipamentoId).tag}<br><span class="hint">${equip(o.equipamentoId).nome}</span></td>
+      <td style="max-width:280px">${o.descricaoProblema}</td>
+      <td>${prioTag(o.prioridade)}</td><td>${fmt(o.dataAbertura)}</td>
+      <td><button class="btn primary sm" onclick="openOrdem('${o.id}')">Triar →</button></td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty"><div class="big">🎉</div>Nenhuma solicitação na fila. Tudo triado!</div>`}
+  </div>`;
+}
+
+/* ===================== EQUIPAMENTOS ===================== */
+function viewEquipamentos(c){
+  destroyCharts();
+  const devidas=preventivasDevidas().length;
+  c.innerHTML=`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap"><h3 style="margin:0;flex:1">⚙️ Equipamentos (${state.equipamentos.length})</h3>
+    ${devidas?`<button class="btn warn sm" onclick="gerarPreventivas()">🔧 Gerar ${devidas} preventiva(s) por contador</button>`:""}
+    <button class="btn primary sm" onclick="editEquip()">+ Novo equipamento</button></div>
+    <div class="filters" style="margin-bottom:10px"><div class="field" style="margin:0;min-width:260px"><input id="eqBusca" placeholder="Buscar TAG, descrição, setor, família..." oninput="renderEquipTable()"></div></div>
+    <div id="equipTable"></div></div>`;
+  renderEquipTable();
+}
+function renderEquipTable(){
+  const bq=document.getElementById("eqBusca"); const q=(bq?bq.value:"").toLowerCase();
+  let list=state.equipamentos.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||""));
+  if(q) list=list.filter(e=>(e.tag+" "+e.nome+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.centroCusto||"")).toLowerCase().includes(q));
+  const el=document.getElementById("equipTable");
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="big">🔍</div>Nenhum equipamento encontrado.</div>`;return;}
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>TAG</th><th>Descrição</th><th>Setor</th><th>Tipo</th><th>Crit.</th><th>Situação</th><th>Estado</th><th>OS ativas</th><th></th></tr></thead><tbody>
+    ${list.map(e=>{const at=ordensAtivasDoEquip(e.id).length;return `<tr onclick="editEquip('${e.id}')">
+      <td><b>${e.tag}</b></td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.tipoEquipto||"—"}</td>
+      <td>${critTag(e.criticidade)}</td><td><span class="tag ${e.situacao==='Ativo'?'t-concluida':'t-cancelada'}">${e.situacao||'Ativo'}</span></td>
+      <td>${e.status==="operando"?'<span class="tag t-concluida">Operando</span>':'<span class="tag t-late">Parado</span>'}</td>
+      <td>${at?`<span class="tag t-execucao">${at}</span>`:"0"}</td>
+      <td><button class="btn sm" onclick="event.stopPropagation();editEquip('${e.id}')">Editar</button></td></tr>`;}).join("")}
+  </tbody></table></div><div class="hint" style="margin-top:8px">${list.length} equipamento(s)</div>`;
+}
+function eqTab(n){
+  document.querySelectorAll('.eqtab').forEach((t,i)=>t.classList.toggle('active',i===n));
+  document.querySelectorAll('.eqpane').forEach((p,i)=>p.classList.toggle('active',i===n));
+  if(n===4) renderEqQR();
+}
+function renderEqQR(){
+  const box=document.getElementById('eqQR'); if(!box) return; box.innerHTML='';
+  const tag=(val('eTag'))||'(sem TAG)';
+  try{ if(window.QRCode){ new QRCode(box,{text:tag,width:150,height:150}); } else { box.textContent='QR indisponível (sem internet).'; } }catch(_){ box.textContent='QR indisponível.'; }
+}
+function editEquip(id){
+  const e=id?equip(id):{tag:"",nome:"",setor:"",criticidade:"Y",status:"operando",tipoEquipto:"Mecânico"};
+  const g=(k,dft)=>(e[k]!==undefined&&e[k]!==null&&e[k]!=="")?e[k]:dft;
+  const optSit=SITUACOES.map(s=>`<option value="${s}">${s}</option>`).join("");
+  const optTipo=TIPOS_EQUIP.map(t=>`<option value="${t}">${t||'— selecione —'}</option>`).join("");
+  const body=`
+    <div class="eqtabs">
+      <button class="eqtab active" onclick="eqTab(0)">1 · Identificação</button>
+      <button class="eqtab" onclick="eqTab(1)">2 · Patrimonial/Técnico</button>
+      <button class="eqtab" onclick="eqTab(2)">3 · Apontamento</button>
+      <button class="eqtab" onclick="eqTab(3)">4 · Observações</button>
+      <button class="eqtab" onclick="eqTab(4)">5 · QR Code</button>
+    </div>
+    <div class="eqpane active">
+      <div class="form-grid">
+        <div class="field"><label class="f">Equipamento (TAG) *</label><input id="eTag" value="${g('tag','')}" placeholder="Ex.: FM1.04.MQRB03"></div>
+        <div class="field"><label class="f">Descrição *</label><input id="eNome" value="${g('nome','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Bem / Patrimônio</label><input id="eBem" value="${g('bem','')}"></div>
+        <div class="field"><label class="f">Conta Patrimonial</label><input id="eContaPatr" value="${g('contaPatrimonial','')}"></div>
+        <div class="field"><label class="f">Estabelecimento</label><input id="eEstab" value="${g('estabelecimento','200')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Divisão / Galpão</label><input id="eSetorArea" value="${g('area','')}"></div>
+        <div class="field"><label class="f">Setor</label><input id="eSetor" value="${g('setor','')}"></div>
+        <div class="field"><label class="f">Grupo Máquina</label><input id="eGrupo" value="${g('grupoMaquina','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Centro de Custo</label><input id="eCentro" value="${g('centroCusto','')}"></div>
+        <div class="field"><label class="f">Família</label><input id="eFamilia" value="${g('familia','')}"></div>
+        <div class="field"><label class="f">Planejador</label><input id="ePlanejador" value="${g('planejador','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Situação (cadastral)</label><select id="eSituacao">${optSit}</select></div>
+        <div class="field"><label class="f">Criticidade</label><select id="eCrit"><option value="X">X — Crítico</option><option value="Y">Y — Médio</option><option value="Z">Z — Baixo</option></select></div>
+        <div class="field"><label class="f">Estado operacional</label><select id="eStatus"><option value="operando">Operando</option><option value="parado">Parado</option></select></div>
+      </div>
+      <div class="secnote"><span>💡</span><span><b>Melhoria:</b> a <b>Criticidade</b> define o prazo automático na triagem (X=24h, Y=3 dias, Z=7 dias). "Situação" é o ciclo de vida do bem; "Estado operacional" muda com as OS.</span></div>
+    </div>
+    <div class="eqpane">
+      <div class="form-grid">
+        <div class="field"><label class="f">Data de Aquisição</label><input type="date" id="eDataAq" value="${g('dataAquisicao','')}"></div>
+        <div class="field"><label class="f">Data de Ativação</label><input type="date" id="eDataAt" value="${g('dataAtivacao','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Nota Fiscal</label><input id="eNF" value="${g('notaFiscal','')}"></div>
+        <div class="field"><label class="f">Série</label><input id="eSerie" value="${g('serie','')}"></div>
+        <div class="field"><label class="f">Valor de Aquisição (R$)</label><input id="eValor" value="${g('valorAquisicao','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Fabricante</label><input id="eFab" value="${g('fabricante','')}"></div>
+        <div class="field"><label class="f">Fornecedor</label><input id="eForn" value="${g('fornecedor','')}"></div>
+        <div class="field"><label class="f">Assistência Técnica</label><input id="eAssist" value="${g('assistTecnica','')}"></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Tipo de Equipamento</label><select id="eTipoEq">${optTipo}</select></div>
+        <div class="field"><label class="f">Calendário</label><input id="eCalend" value="${g('calendario','Produção')}"></div>
+        <div class="field"><label class="f">Equipamento Produtivo</label><select id="eProdutivo"><option value="sim">Sim</option><option value="nao">Não</option></select></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Desenho</label><input id="eDesenho" value="${g('desenho','')}"></div>
+        <div class="field"><label class="f">Revisão</label><input id="eRev" value="${g('revisao','')}"></div>
+        <div class="field"><label class="f">Tipo de Contador</label><input id="eTipoCont" value="${g('tipoContador','')}"></div>
+      </div>
+      <div class="secnote"><span>💡</span><span><b>Melhoria:</b> o <b>Tipo de Equipamento</b> (Elétrico/Mecânico…) passa a sugerir automaticamente a equipa certa na triagem.</span></div>
+    </div>
+    <div class="eqpane">
+      <div class="form-grid">
+        <div class="field"><label class="f">Cálculo de Utilização</label><select id="eCalcUtil"><option>Previsto</option><option>Histórico</option></select></div>
+        <div class="field"><label class="f">Tipo de Apontamento</label><select id="eTipoApont"><option>Contador</option><option>Utilização</option></select></div>
+      </div>
+      <div class="form-grid3">
+        <div class="field"><label class="f">Fator de Conversão</label><input id="eFator" value="${g('fatorConversao','1,0000')}"></div>
+        <div class="field"><label class="f">% Rateio</label><input id="eRateio" value="${g('rateio','100,00')}"></div>
+        <div class="field"><label class="f">Leitura atual do contador (h)</label><input type="number" id="eContador" value="${g('contador',0)}"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label class="f">Intervalo de preventiva (horas) — 0 = desligado</label><input type="number" id="eIntervalo" value="${g('intervaloPreventiva',0)}"></div>
+        <div class="field"><label class="f">Imagem (URL)</label><input id="eImagem" value="${g('imagem','')}"></div>
+      </div>
+      <div class="secnote"><span>💡</span><span><b>Melhoria:</b> com a <b>leitura do contador</b> e o <b>intervalo</b>, o sistema gera sozinho as OS preventivas quando a máquina atinge as horas.</span></div>
+    </div>
+    <div class="eqpane">
+      <div class="field"><label class="f">Observações</label><textarea id="eObs" style="min-height:160px" placeholder="Notas livres: fabricante completo, NF, particularidades...">${g('observacoes','')}</textarea></div>
+    </div>
+    <div class="eqpane">
+      <div class="qrbox"><div id="eqQR"></div>
+        <div><div class="fldgroup-title" style="border:0">Etiqueta do equipamento</div>
+        <p class="hint" style="margin-top:0;max-width:340px">QR Code com a TAG do equipamento. Imprime e cola na máquina; no futuro o operador aponta o telemóvel e abre a OS já preenchida.</p>
+        <button class="btn sm" onclick="renderEqQR()">Atualizar QR</button></div>
+      </div>
+    </div>`;
+  openModal(`${id?"Editar":"Novo"} equipamento`,body,
+    [{label:"Salvar",cls:"primary",fn:()=>{
+      const tag=val("eTag"),nome=val("eNome");if(!tag||!nome){toast("Preencha TAG e Descrição.");eqTab(0);return false;}
+      const data={tag,nome,setor:val("eSetor"),area:val("eSetorArea"),bem:val("eBem"),contaPatrimonial:val("eContaPatr"),estabelecimento:val("eEstab"),
+        grupoMaquina:val("eGrupo"),centroCusto:val("eCentro"),familia:val("eFamilia"),planejador:val("ePlanejador"),
+        situacao:val("eSituacao"),criticidade:val("eCrit"),status:val("eStatus"),
+        dataAquisicao:val("eDataAq"),dataAtivacao:val("eDataAt"),notaFiscal:val("eNF"),serie:val("eSerie"),valorAquisicao:val("eValor"),
+        fabricante:val("eFab"),fornecedor:val("eForn"),assistTecnica:val("eAssist"),tipoEquipto:val("eTipoEq"),calendario:val("eCalend"),
+        equipamentoProdutivo:val("eProdutivo")==="sim",desenho:val("eDesenho"),revisao:val("eRev"),tipoContador:val("eTipoCont"),
+        calcUtilizacao:val("eCalcUtil"),tipoApontamento:val("eTipoApont"),fatorConversao:val("eFator"),rateio:val("eRateio"),
+        contador:parseFloat(val("eContador"))||0,intervaloPreventiva:parseFloat(val("eIntervalo"))||0,imagem:val("eImagem"),observacoes:val("eObs")};
+      if(id){Object.assign(e,data);} else { state.equipamentos.push({id:uid(),ultPrevContador:0,...data}); }
+      save();toast("✅ Equipamento salvo.");render();return true;
+    }}],"wide");
+  document.getElementById("eSituacao").value=g('situacao','Ativo');
+  document.getElementById("eCrit").value=g('criticidade','Y');
+  document.getElementById("eStatus").value=g('status','operando');
+  document.getElementById("eTipoEq").value=g('tipoEquipto','Mecânico');
+  document.getElementById("eProdutivo").value=(e.equipamentoProdutivo===false)?"nao":"sim";
+  document.getElementById("eCalcUtil").value=g('calcUtilizacao','Histórico');
+  document.getElementById("eTipoApont").value=g('tipoApontamento','Contador');
+}
+
+/* ===================== PREVENTIVA POR CONTADOR (melhoria) ===================== */
+function preventivasDevidas(){
+  return state.equipamentos.filter(e=>{
+    const it=e.intervaloPreventiva||0; if(it<=0) return false;
+    if(((e.contador||0)-(e.ultPrevContador||0))<it) return false;
+    return !state.ordens.some(o=>o.equipamentoId===e.id && o.tipo==="preventiva" && isActive(o));
+  });
+}
+function gerarPreventivas(){
+  const lista=preventivasDevidas();
+  if(!lista.length){toast("Nenhuma preventiva por contador devida.");return;}
+  if(!confirm("Gerar "+lista.length+" OS preventiva(s) por contador?")) return;
+  lista.forEach(e=>{
+    const o={id:uid(),numero:nextNumero(),equipamentoId:e.id,solicitante:"Sistema (preventiva por contador)",
+      descricaoProblema:"Manutenção preventiva por contador — equipamento atingiu "+(e.contador||0)+"h (intervalo "+e.intervaloPreventiva+"h).",
+      tipo:"preventiva",prioridade:"media",categoria:tipoParaCategoria(e.tipoEquipto)||null,status:"aberta",tecnicoId:null,prazo:null,
+      dataAbertura:todayStr(),dataInicio:null,dataConclusao:null,servicoExecutado:"",pecas:"",tempoGastoHoras:null,paradaHoras:null,
+      relacionadaA:null,observacoesGestor:"",historico:[{data:todayStr(),evento:"OS preventiva gerada automaticamente (contador)",usuario:"Sistema"}]};
+    state.ordens.push(o); e.ultPrevContador=e.contador||0;
+  });
+  save();toast("✅ "+lista.length+" preventiva(s) gerada(s).");render();
+}
+
+/* ===================== TÉCNICOS ===================== */
+function viewTecnicos(c){
+  destroyCharts();
+  const render1=(eq)=>{const list=state.tecnicos.filter(t=>t.equipe===eq);return `<div class="col card"><div style="display:flex;align-items:center;margin-bottom:10px"><h3 style="margin:0;flex:1">${eq==="mecanica"?"🔧 Manutenção Mecânica":"⚡ Manutenção Elétrica"}</h3><button class="btn primary sm" onclick="editTec(null,'${eq}')">+ Técnico</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Função</th><th>OS ativas</th><th></th></tr></thead><tbody>
+    ${list.map(t=>{const at=state.ordens.filter(o=>o.tecnicoId===t.id&&isActive(o)).length;return `<tr><td><b>${t.nome}</b></td><td>${t.lider?'<span class="tag t-'+eq+'">Líder</span>':"Técnico"}</td><td>${at}</td><td><button class="btn sm" onclick="editTec('${t.id}')">Editar</button></td></tr>`;}).join("")}
+    </tbody></table></div></div>`;};
+  c.innerHTML=`<div class="row">${render1("mecanica")}${render1("eletrica")}</div>`;
+}
+function editTec(id,eq){
+  const t=id?tec(id):{nome:"",equipe:eq||"mecanica",lider:false};
+  openModal(`${id?"Editar":"Novo"} técnico`,`
+    <div class="field"><label class="f">Nome *</label><input id="tNome" value="${t.nome}"></div>
+    <div class="field"><label class="f">Equipa</label><select id="tEquipe"><option value="mecanica">Mecânica</option><option value="eletrica">Elétrica</option></select></div>
+    <div class="field"><label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="tLider" style="width:auto"> É líder da equipa</label></div>`,
+    [{label:"Salvar",cls:"primary",fn:()=>{
+      const nome=val("tNome");if(!nome){toast("Informe o nome.");return false;}
+      const data={nome,equipe:val("tEquipe"),lider:document.getElementById("tLider").checked};
+      if(id)Object.assign(t,data);else state.tecnicos.push({id:uid(),...data});
+      save();toast("Técnico salvo.");render();return true;
+    }}]);
+  document.getElementById("tEquipe").value=t.equipe;document.getElementById("tLider").checked=t.lider;
+}
+
+/* ===================== RELATÓRIOS ===================== */
+let rep={equip:"",ini:"",fim:""};
+function viewRelatorios(c){
+  destroyCharts();
+  const hoje=todayStr();const ini=rep.ini||(new Date(Date.now()-90*86400000)).toISOString().slice(0,10);
+  c.innerHTML=`
+  <div class="card" style="margin-bottom:16px">
+    <h3>📈 Histórico de manutenção por equipamento e período</h3>
+    <div class="filters">
+      <div class="field"><label class="f">Equipamento</label><select id="rEquip"><option value="">Todos</option>${state.equipamentos.map(e=>`<option value="${e.id}">${e.tag} · ${e.nome}</option>`).join("")}</select></div>
+      <div class="field"><label class="f">De</label><input type="date" id="rIni" value="${rep.ini||ini}"></div>
+      <div class="field"><label class="f">Até</label><input type="date" id="rFim" value="${rep.fim||hoje}"></div>
+      <button class="btn primary" onclick="gerarRelatorio()">Gerar</button>
+      <button class="btn" onclick="exportCSV()">⬇ Exportar CSV</button>
+    </div>
+    <div id="repResumo"></div>
+  </div>
+  <div id="repResultado"></div>`;
+  document.getElementById("rEquip").value=rep.equip;
+  gerarRelatorio();
+}
+function relatorioDados(){
+  rep={equip:val("rEquip"),ini:val("rIni"),fim:val("rFim")};
+  return state.ordens.filter(o=>{
+    if(rep.equip&&o.equipamentoId!==rep.equip)return false;
+    const dt=o.dataAbertura;
+    if(rep.ini&&dt<rep.ini)return false;
+    if(rep.fim&&dt>rep.fim)return false;
+    return true;
+  }).sort((a,b)=>a.dataAbertura.localeCompare(b.dataAbertura));
+}
+function gerarRelatorio(){
+  const list=relatorioDados();
+  const concl=list.filter(o=>o.status==="concluida");
+  const totalParada=list.reduce((s,o)=>s+(o.paradaHoras||0),0);
+  const totalHoras=list.reduce((s,o)=>s+(o.tempoGastoHoras||0),0);
+  document.getElementById("repResumo").innerHTML=`<div class="grid kpis" style="margin-top:8px">
+    <div class="kpi k-open"><div class="bar"></div><div class="lbl">OS no período</div><div class="val">${list.length}</div></div>
+    <div class="kpi k-done"><div class="bar"></div><div class="lbl">Concluídas</div><div class="val">${concl.length}</div></div>
+    <div class="kpi k-back"><div class="bar"></div><div class="lbl">Horas trabalhadas</div><div class="val">${totalHoras.toFixed(1)}h</div></div>
+    <div class="kpi k-late"><div class="bar"></div><div class="lbl">Horas de parada</div><div class="val">${totalParada.toFixed(0)}h</div></div>
+  </div>`;
+  const r=document.getElementById("repResultado");
+  if(!list.length){r.innerHTML=`<div class="card empty"><div class="big">🔍</div>Nenhuma manutenção registada para este filtro.</div>`;return;}
+  const capped=list.slice(0,500);
+  r.innerHTML=`<div class="card"><h3>Detalhe (${fmt(rep.ini)} a ${fmt(rep.fim)})${list.length>500?` — mostrando 500 de ${list.length} (use o CSV para o total)`:""}</h3><div class="table-wrap"><table>
+    <thead><tr><th>OS</th><th>Data</th><th>Equipamento</th><th>Tipo</th><th>Categoria</th><th>Problema / Serviço executado</th><th>Responsável</th><th>Horas</th><th>Situação</th></tr></thead><tbody>
+    ${capped.map(o=>`<tr onclick="openOrdem('${o.id}')"><td><b>${o.numero}</b></td><td>${fmt(o.dataAbertura)}</td><td>${equip(o.equipamentoId).tag}</td><td>${TIPOS[o.tipo]}</td><td>${catTag(o.categoria)}</td>
+      <td style="max-width:300px"><b>P:</b> ${o.descricaoProblema.slice(0,70)}${o.servicoExecutado?`<br><b>S:</b> ${o.servicoExecutado.slice(0,80)}`:""}</td>
+      <td>${o.tecnicoId?tec(o.tecnicoId).nome:"—"}</td><td>${o.tempoGastoHoras?o.tempoGastoHoras+"h":"—"}</td><td>${statusTag(o)}</td></tr>`).join("")}
+  </tbody></table></div></div>`;
+}
+function exportCSV(){
+  const list=relatorioDados();
+  const head=["Numero","DataAbertura","DataConclusao","Equipamento_TAG","Equipamento_Nome","Setor","Tipo","Categoria","Prioridade","Situacao","Solicitante","Responsavel","Problema","ServicoExecutado","Pecas","HorasTrabalho","HorasParada","Prazo"];
+  const rows=list.map(o=>{const e=equip(o.equipamentoId);const t=o.tecnicoId?tec(o.tecnicoId).nome:"";return [o.numero,o.dataAbertura,o.dataConclusao||"",e.tag,e.nome,e.setor,TIPOS[o.tipo],o.categoria?CATEGORIAS[o.categoria]:"",PRIORIDADES[o.prioridade],STATUS[o.status].short,o.solicitante||"",t,o.descricaoProblema,o.servicoExecutado||"",o.pecas||"",o.tempoGastoHoras||"",o.paradaHoras||"",o.prazo||""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";");});
+  const csv="﻿"+head.join(";")+"\n"+rows.join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="relatorio_manutencao.csv";a.click();
+  toast("CSV exportado ("+list.length+" linhas).");
+}
+
+/* ===================== CONFIG / BACKUP ===================== */
+function viewConfig(c){
+  destroyCharts();
+  c.innerHTML=`<div class="row">
+    <div class="col card">
+      <h3>💾 Backup dos dados</h3>
+      <p class="hint">A base real (TOTVS) vem do ficheiro <b>DB_REI_dados.js</b> — mantenha-o na mesma pasta deste HTML. O navegador guarda apenas as <b>alterações locais</b> (OS novas, triagens, conclusões, edições). Exporte regularmente um backup. Na futura versão na nuvem, estes dados poderão ser importados.</p>
+      <div class="chip-row"><button class="btn primary" onclick="exportJSON()">⬇ Exportar backup (JSON)</button>
+      <label class="btn">⬆ Importar backup<input type="file" id="impFile" accept="application/json" style="display:none" onchange="importJSON(event)"></label></div>
+    </div>
+    <div class="col card">
+      <h3>📊 Resumo da base</h3>
+      <div class="detail-grid">
+        <div><div class="dl">Ordens de serviço</div><div class="dv">${state.ordens.length}</div></div>
+        <div><div class="dl">— importadas do TOTVS</div><div class="dv">${state.ordens.filter(o=>o.db).length}</div></div>
+        <div><div class="dl">— criadas neste sistema</div><div class="dv">${state.ordens.filter(o=>!o.db).length}</div></div>
+        <div><div class="dl">Equipamentos</div><div class="dv">${state.equipamentos.length}</div></div>
+        <div><div class="dl">Técnicos</div><div class="dv">${state.tecnicos.length}</div></div>
+        <div><div class="dl">Próximo nº OS</div><div class="dv">OS-2026-${String(state.proximoNumero).padStart(4,"0")}</div></div>
+      </div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+      <button class="btn bad" onclick="resetTudo()">🗑 Descartar alterações locais (volta à base TOTVS original)</button>
+    </div>
+  </div>`;
+}
+function exportJSON(){const blob=new Blob([JSON.stringify(state)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="cmms_backup_"+todayStr()+".json";a.click();toast("Backup exportado.");}
+function importJSON(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.ordens||!d.equipamentos)throw 0;state=d;state.currentUser={perfil:"gestor",tecnicoId:null,nome:"Gestor da Manutenção"};state.perfil="gestor";save();toast("Backup importado!");render();}catch(e){toast("Arquivo inválido.");}};r.readAsText(f);}
+function resetTudo(){if(confirm("Apagar todas as alterações locais (OS novas, triagens, edições) e voltar à base TOTVS original?")){localStorage.removeItem(LS_KEY);load();save();toast("Base reiniciada.");render();}}
+
+/* ===================== MODAL DE ORDEM (DETALHE + AÇÕES) ===================== */
+function openOrdem(id){
+  const o=ordemById(id);if(!o)return;const e=equip(o.equipamentoId);
+  const rel=o.relacionadaA?ordemById(o.relacionadaA):null;
+  let body=`
+    <div class="chip-row" style="margin-bottom:14px">${statusTag(o)} ${catTag(o.categoria)} ${prioTag(o.prioridade)} <span class="tag t-cancelada">${TIPOS[o.tipo]}</span></div>
+    ${rel?`<div class="alert dup" style="margin-bottom:14px"><div class="ai">🔗</div><div>Esta OS foi aberta com uma ordem ativa existente do mesmo equipamento: <b>${rel.numero}</b>. <button class="btn sm" onclick="openOrdem('${rel.id}')">Ver ${rel.numero}</button></div></div>`:""}
+    <div class="detail-grid">
+      <div><div class="dl">Equipamento</div><div class="dv">${e.tag} · ${e.nome}</div></div>
+      <div><div class="dl">Setor</div><div class="dv">${o.setorSolicitante||e.setor}</div></div>
+      <div><div class="dl">Solicitante</div><div class="dv">${o.solicitante||"—"}</div></div>
+      <div><div class="dl">Aberta em</div><div class="dv">${fmt(o.dataAbertura)}</div></div>
+      <div><div class="dl">Responsável</div><div class="dv">${o.tecnicoId?tec(o.tecnicoId).nome+" ("+CATEGORIAS[tec(o.tecnicoId).equipe]+")":"—"}</div></div>
+      <div><div class="dl">Prazo</div><div class="dv">${o.prazo?fmt(o.prazo)+(isOverdue(o)?' <span class="tag t-late">atrasada</span>':''):"—"}</div></div>
+    </div>
+    <div class="field" style="margin-top:14px"><div class="dl">Problema reportado</div><div style="background:var(--panel2);border-radius:8px;padding:10px;margin-top:4px">${o.descricaoProblema}</div></div>
+    ${o.observacoesGestor?`<div class="field"><div class="dl">Observações do gestor</div><div style="background:#fffbeb;border-radius:8px;padding:10px;margin-top:4px">${o.observacoesGestor}</div></div>`:""}
+    ${o.servicoExecutado?`<div class="field"><div class="dl">Serviço executado</div><div style="background:#f0fdf4;border-radius:8px;padding:10px;margin-top:4px">${o.servicoExecutado}<br><span class="hint">Peças: ${o.pecas||"—"} · Tempo: ${o.tempoGastoHoras||"—"}h · Parada: ${o.paradaHoras||"—"}h</span></div></div>`:""}
+    <div class="field"><div class="dl">Histórico</div><ul class="timeline" style="margin-top:8px">${o.historico.map(h=>`<li><div>${h.evento}</div><div class="tmeta">${fmt(h.data)} · ${h.usuario}</div></li>`).join("")}</ul></div>
+  `;
+  const acoes=[];
+  acoes.push({label:"🖨 Imprimir folha",cls:"",fn:()=>{imprimirOS(o.id);return false;}});
+  if(o.status==="aberta") acoes.push({label:"Triar e atribuir",cls:"primary",fn:()=>{triarModal(o.id);return false;}});
+  if(o.status==="execucao"||o.status==="aguardando_peca"){acoes.push({label:"Editar atribuição",cls:"",fn:()=>{triarModal(o.id);return false;}});}
+  if(o.status==="execucao") acoes.push({label:"⏸ Aguardando peça",cls:"warn",fn:()=>{o.status="aguardando_peca";addHist(o,"Aguardando peça");save();render();return true;}});
+  if(o.status==="aguardando_peca") acoes.push({label:"▶ Retomar execução",cls:"",fn:()=>{o.status="execucao";addHist(o,"Execução retomada");save();render();return true;}});
+  if(o.status==="execucao"||o.status==="aguardando_peca") acoes.push({label:"✅ Concluir / preencher",cls:"ok",fn:()=>{concluirModal(o.id);return false;}});
+  if(isActive(o)) acoes.push({label:"Cancelar OS",cls:"bad",fn:()=>{if(confirm("Cancelar esta OS?")){o.status="cancelada";addHist(o,"OS cancelada pelo gestor");save();toast("OS cancelada.");render();return true;}return false;}});
+  openModal(o.numero+" — Ordem de Serviço",body,acoes,"wide");
+}
+
+function triarModal(id){
+  const o=ordemById(id);
+  const tecOpts=(eq)=>state.tecnicos.filter(t=>t.equipe===eq).map(t=>`<option value="${t.id}">${t.nome}${t.lider?" (líder)":""}</option>`).join("");
+  openModal("Triagem — "+o.numero,`
+    <div class="alert info" style="margin-bottom:14px"><div class="ai">🔎</div><div>A <b>equipa</b> e o <b>prazo</b> já vêm sugeridos pelo cadastro do equipamento (tipo e criticidade). Confira e ajuste se necessário.</div></div>
+    <div class="field"><div class="dl">Problema</div><div style="background:var(--panel2);padding:8px;border-radius:8px;margin-top:4px">${o.descricaoProblema}</div></div>
+    <div class="form-grid">
+      <div class="field"><label class="f">Categoria / equipa *</label><select id="trCat" onchange="trUpdateTec()"><option value="">— selecione —</option><option value="mecanica">Mecânica</option><option value="eletrica">Elétrica</option></select></div>
+      <div class="field"><label class="f">Técnico responsável</label><select id="trTec"><option value="">— atribuir depois —</option></select></div>
+      <div class="field"><label class="f">Prioridade</label><select id="trPrio"><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></div>
+      <div class="field"><label class="f">Prazo de execução</label><input type="date" id="trPrazo" value="${o.prazo||""}"></div>
+    </div>
+    <div class="field"><label class="f">Observações do gestor</label><textarea id="trObs" placeholder="Orientações, segurança, materiais...">${o.observacoesGestor||""}</textarea></div>
+  `,[{label:"Confirmar triagem",cls:"primary",fn:()=>{
+      const cat=val("trCat");if(!cat){toast("Selecione a categoria.");return false;}
+      o.categoria=cat;o.prioridade=val("trPrio");o.prazo=val("trPrazo")||null;o.observacoesGestor=val("trObs");
+      const tid=val("trTec");o.tecnicoId=tid||null;
+      if(o.status==="aberta"){o.status="execucao";if(!o.dataInicio&&tid)o.dataInicio=todayStr();}
+      addHist(o,"Triada → "+CATEGORIAS[cat]+(tid?" · "+tec(tid).nome:"")+(o.prazo?" · prazo "+fmt(o.prazo):""));
+      save();toast("Triagem registada.");render();return true;
+    }}]);
+  const _eqp=equip(o.equipamentoId);
+  const _catSug=o.categoria||tipoParaCategoria(_eqp&&_eqp.tipoEquipto);
+  document.getElementById("trCat").value=_catSug||"";
+  document.getElementById("trPrio").value=o.prioridade;
+  if(!o.prazo && _eqp){ const _s=slaDias(_eqp.criticidade); if(_s){ const _d=new Date(); _d.setDate(_d.getDate()+_s); const _p=document.getElementById("trPrazo"); if(_p&&!_p.value) _p.value=_d.toISOString().slice(0,10); } }
+  window._trMakeTec=(eq,sel)=>{document.getElementById("trTec").innerHTML=`<option value="">— atribuir depois —</option>`+tecOpts(eq);if(sel)document.getElementById("trTec").value=sel;};
+  window.trUpdateTec=()=>{const eq=val("trCat");if(eq)window._trMakeTec(eq,"");};
+  if(_catSug)window._trMakeTec(_catSug,o.tecnicoId||"");
+}
+
+function concluirModal(id){
+  const o=ordemById(id);
+  openModal("Concluir OS — "+o.numero,`
+    <div class="alert info" style="margin-bottom:14px"><div class="ai">📝</div><div>Preencha o que foi realizado. Esta é a folha que o técnico entrega ao gestor.</div></div>
+    <div class="field"><label class="f">Serviço executado *</label><textarea id="cServ" placeholder="Descreva o que foi feito, causa identificada, ações...">${o.servicoExecutado||""}</textarea></div>
+    <div class="field"><label class="f">Peças / materiais utilizados</label><input id="cPecas" value="${o.pecas||""}" placeholder="Ex.: Rolamento 6204 (2), Correia A-50 (1)"></div>
+    <div class="form-grid">
+      <div class="field"><label class="f">Tempo de trabalho (horas)</label><input type="number" step="0.5" id="cTempo" value="${o.tempoGastoHoras||""}"></div>
+      <div class="field"><label class="f">Tempo de parada do equipamento (horas)</label><input type="number" step="0.5" id="cParada" value="${o.paradaHoras||""}"></div>
+      <div class="field"><label class="f">Data de início</label><input type="date" id="cIni" value="${o.dataInicio||todayStr()}"></div>
+      <div class="field"><label class="f">Data de conclusão</label><input type="date" id="cFim" value="${o.dataConclusao||todayStr()}"></div>
+    </div>
+  `,[{label:"✅ Concluir OS",cls:"ok",fn:()=>{
+      const serv=val("cServ");if(!serv){toast("Descreva o serviço executado.");return false;}
+      o.servicoExecutado=serv;o.pecas=val("cPecas");
+      o.tempoGastoHoras=parseFloat(val("cTempo"))||null;o.paradaHoras=parseFloat(val("cParada"))||null;
+      o.dataInicio=val("cIni")||o.dataInicio;o.dataConclusao=val("cFim")||todayStr();o.status="concluida";
+      addHist(o,"OS concluída");save();toast("✅ OS concluída!");render();return true;
+    }},{label:"Salvar sem concluir",cls:"",fn:()=>{
+      o.servicoExecutado=val("cServ");o.pecas=val("cPecas");o.tempoGastoHoras=parseFloat(val("cTempo"))||null;o.paradaHoras=parseFloat(val("cParada"))||null;o.dataInicio=val("cIni")||o.dataInicio;
+      save();toast("Progresso salvo.");return true;
+    }}]);
+}
+
+/* ===================== IMPRESSÃO DA FOLHA ===================== */
+function imprimirOS(id){
+  const o=ordemById(id);const e=equip(o.equipamentoId);const t=o.tecnicoId?tec(o.tecnicoId):null;
+  document.getElementById("printArea").innerHTML=`<div class="sheet">
+    <div class="sh"><div><img src="logo-rei.png" style="height:46px;display:block" onerror="this.style.display='none'"><h2 style="margin-top:6px">ORDEM DE SERVIÇO — MANUTENÇÃO</h2><div>Nº <b>${o.numero}</b></div></div>
+      <div style="text-align:right"><b>REI Auto Parts</b><br>Emissão: ${fmt(todayStr())}</div></div>
+    <table><tr><th style="width:25%">Equipamento</th><td>${e.tag} · ${e.nome}</td><th style="width:15%">Setor</th><td>${o.setorSolicitante||e.setor}</td></tr>
+      <tr><th>Categoria</th><td>${o.categoria?CATEGORIAS[o.categoria]:"________"}</td><th>Prioridade</th><td>${PRIORIDADES[o.prioridade]}</td></tr>
+      <tr><th>Tipo</th><td>${TIPOS[o.tipo]}</td><th>Prazo</th><td>${o.prazo?fmt(o.prazo):"________"}</td></tr>
+      <tr><th>Solicitante</th><td>${o.solicitante||""}</td><th>Aberta em</th><td>${fmt(o.dataAbertura)}</td></tr>
+      <tr><th>Responsável</th><td colspan="3">${t?t.nome+" — "+CATEGORIAS[t.equipe]:"________________________"}</td></tr></table>
+    <p style="margin:10px 0 2px"><b>Problema reportado:</b></p><div class="blk" style="min-height:40px">${o.descricaoProblema}</div>
+    ${o.observacoesGestor?`<p style="margin:10px 0 2px"><b>Observações do gestor:</b></p><div class="blk" style="min-height:30px">${o.observacoesGestor}</div>`:""}
+    <p style="margin:14px 0 2px"><b>SERVIÇO EXECUTADO</b> (preencher):</p><div class="blk">${o.servicoExecutado||""}</div>
+    <table style="margin-top:10px"><tr><th style="width:50%">Peças / materiais utilizados</th><th style="width:25%">Tempo de trabalho (h)</th><th style="width:25%">Parada (h)</th></tr>
+      <tr><td style="height:40px">${o.pecas||""}</td><td>${o.tempoGastoHoras||""}</td><td>${o.paradaHoras||""}</td></tr></table>
+    <div class="sign"><div>Técnico responsável</div><div>Líder da equipa</div><div>Gestor da Manutenção</div></div>
+  </div>`;
+  window.print();
+}
+
+/* ===================== MODAL GENÉRICO ===================== */
+function val(id){const el=document.getElementById(id);return el?el.value.trim():"";}
+function openModal(title,bodyHTML,actions,extraCls){
+  const root=document.getElementById("modalRoot");
+  const btns=(actions||[]).map((a,i)=>`<button class="btn ${a.cls||''}" data-i="${i}">${a.label}</button>`).join("");
+  root.innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal ${extraCls||''}">
+    <div class="mh"><h2>${title}</h2><button class="x" onclick="closeModal()">×</button></div>
+    <div class="mb">${bodyHTML}</div>
+    <div class="mf"><button class="btn" onclick="closeModal()">Fechar</button>${btns}</div>
+  </div></div>`;
+  (actions||[]).forEach((a,i)=>{root.querySelector(`[data-i="${i}"]`).onclick=()=>{const keepOpen=a.fn();if(keepOpen!==false)closeModal();};});
+}
+function closeModal(){document.getElementById("modalRoot").innerHTML="";}
+
+/* ===================== INÍCIO ===================== */
+document.getElementById("yr").textContent=new Date().getFullYear();
+load();
+render();
+</script>
+</body>
+</html>

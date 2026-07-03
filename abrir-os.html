@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REI Auto Parts · Abrir Ordem de Serviço</title>
+<style>
+  :root{
+    --brand:#1CA9E0;--brand-d:#0e7490;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;
+    --bg:#0b1729;--panel:#fff;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;
+    --shadow:0 1px 3px rgba(15,23,42,.08);--shadow-lg:0 14px 40px rgba(2,8,23,.18);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;color:var(--ink);
+    background:radial-gradient(1100px 560px at 75% -10%,#13325c,#0b1729) fixed;min-height:100vh;padding:26px 14px}
+  .wrap{max-width:640px;margin:0 auto}
+  .card{background:var(--panel);border-radius:18px;box-shadow:var(--shadow-lg);overflow:hidden}
+  .head{background:linear-gradient(135deg,#0f1f38,#13325c);padding:20px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo-box{background:#fff;border-radius:11px;padding:7px 11px;display:flex;align-items:center;line-height:0}
+  .head .ttl{color:#fff;flex:1;min-width:160px}
+  .head .ttl b{font-size:19px;display:block;line-height:1.15}
+  .head .ttl span{color:#9fc6e8;font-size:13px}
+  .body{padding:22px 24px 26px}
+  label.f{display:block;font-size:13px;font-weight:700;color:#334155;margin:0 0 6px}
+  label.f .req{color:var(--bad)}
+  .field{margin-bottom:16px}
+  input,select,textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(28,169,224,.16)}
+  textarea{min-height:96px;resize:vertical}
+  .invalid{border-color:var(--bad)!important;background:#fef2f2}
+  .err{color:var(--bad);font-size:12.5px;margin-top:5px;display:none}
+  .err.show{display:block}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media(max-width:520px){.row2{grid-template-columns:1fr}}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:11px;padding:14px 18px;font-size:15.5px;font-weight:800;cursor:pointer;width:100%}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.primary:hover{background:#1689ba}
+  .btn.ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+  .alert{border-radius:12px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start;font-size:13.5px;margin-bottom:16px}
+  .alert.dup{background:#fef2f2;border:1.5px solid #fecaca;color:#7f1d1d}
+  .alert.ok{background:#f0fdf4;border:1.5px solid #bbf7d0;color:#14532d}
+  .alert .i{font-size:20px;line-height:1}
+  .os-mini{background:#fff;border:1px solid #fecaca;border-radius:9px;padding:9px 11px;margin-top:7px;font-size:13px}
+  .tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:#dbeafe;color:#1e40af}
+  .check{display:flex;gap:9px;align-items:flex-start;margin-top:10px;font-size:13.5px;cursor:pointer}
+  .check input{width:auto;margin-top:3px}
+  .foot{text-align:center;color:#9fc6e8;font-size:12px;margin-top:16px}
+  /* sucesso */
+  .success{padding:34px 24px;text-align:center}
+  .success .big{font-size:54px}
+  .success h2{margin:10px 0 4px;font-size:22px}
+  .success .num{font-size:26px;font-weight:900;color:var(--brand-d);letter-spacing:.5px;margin:8px 0}
+  .success p{color:var(--muted);font-size:14px;margin:6px 0 20px}
+  .suglist{position:absolute;z-index:60;left:0;right:0;top:100%;background:#fff;border:1.5px solid var(--line);border-radius:10px;box-shadow:var(--shadow-lg);max-height:270px;overflow:auto;margin-top:4px}
+  .sugitem{padding:9px 12px;cursor:pointer;font-size:13.5px;border-bottom:1px solid var(--line)}
+  .sugitem:last-child{border-bottom:0}
+  .sugitem:hover{background:#f1f5f9}
+  .field.rel{position:relative}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="head">
+      <div class="logo-box" id="logoBox"></div>
+      <div class="ttl"><b>Abrir Ordem de Serviço</b><span>Manutenção · REI Auto Parts 🇧🇷</span></div>
+    </div>
+    <div id="formArea" class="body"></div>
+    <div id="successArea" class="success" style="display:none"></div>
+  </div>
+  <div class="foot">Portal de solicitação · v6.0 (base real TOTVS) · preencha os campos obrigatórios <span style="color:#dc2626">*</span></div>
+</div>
+
+<script src="DB_REI_dados.js"></script>
+<script>
+/* ===== armazenamento partilhado com o programa de gestão (mesmo navegador) ===== */
+const LS_KEY="rei_cmms_v5_real"; // mesma chave do programa de gestão v5/v6
+const ATIVAS=["aberta","execucao","aguardando_peca"];
+let state=null, ORIG=new Map();
+
+function uid(){return Math.random().toString(36).slice(2,9);}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+
+const GALPOES={FF1:"Fundição de Ferro (fase II)",FF2:"Fundição de Ferro (VICK)",FF3:"Fundição de Ferro (FBO X)",FA1:"Fundição de Aço (fase IV)",FAL1:"Fundição de Alumínio",FM1:"Fundição Manual e Alumínio (fase III)",US1:"Usinagem",US2:"Usinagem",AL1:"Almoxarifado",RE1:"Recepção",CM1:"Comercial",SG1:"Segurança",VEI:"Veículos"};
+function galpaoDoTag(tag){const p=(tag||"").split(".")[0];return GALPOES[p]||p||"";}
+
+function tecnicosPadrao(){
+  return [
+    {id:"t1",nome:"Manoel",equipe:"mecanica",lider:true},{id:"t2",nome:"Marciel",equipe:"mecanica",lider:false},
+    {id:"t3",nome:"Leandro",equipe:"mecanica",lider:false},{id:"t4",nome:"Rafael",equipe:"mecanica",lider:false},
+    {id:"t5",nome:"Marcão",equipe:"mecanica",lider:false},{id:"t6",nome:"Geovane",equipe:"mecanica",lider:false},
+    {id:"t7",nome:"Eduardo",equipe:"eletrica",lider:true},{id:"t8",nome:"Beto",equipe:"eletrica",lider:false},
+    {id:"t9",nome:"Zetim",equipe:"eletrica",lider:false},{id:"t10",nome:"Cebola",equipe:"eletrica",lider:false},
+    {id:"t11",nome:"Evandro",equipe:"eletrica",lider:false},{id:"t12",nome:"Jonathan",equipe:"eletrica",lider:false}
+  ];
+}
+
+/* Base real: equipamentos completos + apenas as OS ativas do TOTVS (para o alerta de duplicados).
+   O programa de gestão expande a base completa; aqui só o necessário (mais leve no celular). */
+function expandDB(){
+  const src=window.DB_REI||{equipamentos:[],ordens:[]};
+  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
+    familia:r[2]||"",centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
+    situacao:"Ativo",criticidade:"Y",status:"operando"}));
+  const idsEq=new Set(eqs.map(e=>e.id));
+  const EST_DB_LBL=["Encerrada","Cancelada","Aberta Ordem","Aprovada"];
+  const ords=src.ordens.filter(r=>r[3]===2||r[3]===3).map(r=>{
+    const num=r[0],tag=r[1],desc=r[2],est=r[3],usu=r[4],dt=r[5];
+    const eid=tag?(idsEq.has("q_"+tag)?"q_"+tag:"x:"+tag):null;
+    return {id:"d"+num,db:true,numero:String(num),equipamentoId:eid,solicitante:usu||"",
+      tipo:"corretiva",prioridade:"media",categoria:null,status:"aberta",tecnicoId:null,prazo:null,
+      descricaoProblema:desc||"(sem descrição)",dataAbertura:dt,dataInicio:null,dataConclusao:null,
+      servicoExecutado:"",pecas:"",tempoGastoHoras:null,paradaHoras:null,relacionadaA:null,observacoesGestor:"",
+      historico:[{data:dt,evento:"OS importada do TOTVS · estado original: "+(EST_DB_LBL[est]||"?"),usuario:usu||"TOTVS"}]};
+  });
+  return {eqs,ords};
+}
+
+function save(){
+  const changed=r=>!r.db||JSON.stringify(r)!==ORIG.get(r.id);
+  const persist={tecnicoAtual:state.tecnicoAtual,proximoNumero:state.proximoNumero,tecnicos:state.tecnicos,
+    equipamentos:state.equipamentos.filter(changed),ordens:state.ordens.filter(changed)};
+  try{localStorage.setItem(LS_KEY,JSON.stringify(persist));}
+  catch(e){alert("⚠️ Armazenamento do navegador cheio. Avise o gestor da manutenção.");}
+}
+
+function load(){
+  if(!window.DB_REI){alert("⚠️ Ficheiro DB_REI_dados.js não encontrado.\nMantenha-o na mesma pasta deste HTML.");}
+  const {eqs,ords}=expandDB();
+  ORIG=new Map();
+  eqs.forEach(e=>ORIG.set(e.id,JSON.stringify(e)));
+  ords.forEach(o=>ORIG.set(o.id,JSON.stringify(o)));
+  let persisted=null;
+  const raw=localStorage.getItem(LS_KEY);
+  if(raw){try{persisted=JSON.parse(raw);}catch(e){persisted=null;}}
+  const mapE=new Map(eqs.map(e=>[e.id,e]));
+  const mapO=new Map(ords.map(o=>[o.id,o]));
+  if(persisted){
+    (persisted.equipamentos||[]).forEach(e=>mapE.set(e.id,e));
+    (persisted.ordens||[]).forEach(o=>mapO.set(o.id,o));
+  }
+  state={tecnicoAtual:(persisted&&persisted.tecnicoAtual)||"t1",
+    proximoNumero:(persisted&&persisted.proximoNumero)||1,
+    tecnicos:(persisted&&persisted.tecnicos&&persisted.tecnicos.length)?persisted.tecnicos:tecnicosPadrao(),
+    equipamentos:[...mapE.values()],
+    ordens:[...mapO.values()]};
+}
+
+function equip(id){return state.equipamentos.find(e=>e.id===id)||{tag:"—",nome:"(equipamento)",setor:"—"};}
+function ativasDoEquip(eid){return state.ordens.filter(o=>o.equipamentoId===eid&&ATIVAS.includes(o.status));}
+function nextNumero(){const n="OS-2026-"+String(state.proximoNumero).padStart(4,"0");state.proximoNumero++;return n;}
+
+/* ===== logótipo: usa logo-rei.png (oficial) se existir na mesma pasta; senão recriação SVG ===== */
+function logoFallbackSVG(){
+  return `<svg viewBox="0 0 250 78" width="150" height="47" xmlns="http://www.w3.org/2000/svg" aria-label="REI Auto Parts">
+    <path d="M44 6 q20 0 20 21 q0 17 -16 20 l0 -13 q5 -1 5 -7 q0 -7 -8 -7 l-9 0 0 42 -13 0 0 -49 z" fill="#1CA9E0"/>
+    <path d="M14 50 l13 0 0 22 -13 0 z" fill="#1CA9E0"/>
+    <path d="M30 50 l14 22 -14 0 z" fill="#0f172a"/>
+    <text x="86" y="50" font-family="Arial Black,Arial,sans-serif" font-size="50" font-weight="900" fill="#0f172a">REI</text>
+    <rect x="87" y="58" width="150" height="18" rx="3" fill="none" stroke="#1CA9E0" stroke-width="2.4"/>
+    <text x="94" y="72" font-family="Arial,sans-serif" font-size="13" font-weight="800" letter-spacing="1" fill="#0f172a">AUTO <tspan fill="#1CA9E0">PARTS</tspan></text>
+  </svg>`;
+}
+function mountLogo(){
+  const box=document.getElementById("logoBox");
+  const img=new Image();
+  img.alt="REI Auto Parts"; img.style.height="40px"; img.style.display="block";
+  img.onerror=()=>{box.innerHTML=logoFallbackSVG();};
+  img.onload=()=>{box.innerHTML="";box.appendChild(img);};
+  img.src="logo-rei.png";
+}
+
+/* ===== formulário ===== */
+function renderForm(){
+  const setores=[...new Set(state.equipamentos.map(e=>e.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
+  document.getElementById("formArea").innerHTML=`
+    <div class="row2">
+      <div class="field">
+        <label class="f">Seu nome / quem solicita <span class="req">*</span></label>
+        <input id="fSolic" placeholder="Ex.: João da Produção">
+        <div class="err" id="eSolic">Informe o seu nome.</div>
+      </div>
+      <div class="field">
+        <label class="f">Setor / Local <span class="req">*</span></label>
+        <select id="fSetor"><option value="">— selecione o setor —</option>${setores.map(x=>`<option value="${x}">${x}</option>`).join("")}</select>
+        <div class="hint">Ao escolher o equipamento, o setor é preenchido automaticamente.</div>
+        <div class="err" id="eSetor">Selecione o setor.</div>
+      </div>
+    </div>
+    <div class="field rel">
+      <label class="f">Equipamento <span class="req">*</span></label>
+      <input id="fEquipBusca" placeholder="Digite a TAG ou o nome (ex.: JATO, FF1.02, torno...)" autocomplete="off">
+      <input type="hidden" id="fEquip">
+      <div id="eqSugList" class="suglist" style="display:none"></div>
+      <div class="hint" id="eqHint"></div>
+      <div class="err" id="eEquip">Busque e selecione o equipamento na lista.</div>
+    </div>
+    <div id="dupArea"></div>
+    <div class="field">
+      <label class="f">Tipo</label>
+      <select id="fTipo"><option value="corretiva">Corretiva (quebra / falha)</option><option value="preventiva">Preventiva (revisão / inspeção)</option></select>
+      <div class="hint">A categoria (mecânica/elétrica), prioridade e responsável são definidos pelo gestor.</div>
+    </div>
+    <div class="field">
+      <label class="f">Descreva o problema <span class="req">*</span></label>
+      <textarea id="fDesc" placeholder="O que está acontecendo? Sintomas, ruídos, quando começou, se parou o equipamento..."></textarea>
+      <div class="err" id="eDesc">Descreva o problema (mínimo de 10 caracteres).</div>
+    </div>
+    <button class="btn primary" id="btnEnviar">📨 Enviar solicitação</button>`;
+  document.getElementById("fEquipBusca").addEventListener("input",eqSugestoes);
+  document.getElementById("fEquipBusca").addEventListener("focus",eqSugestoes);
+  document.getElementById("fSetor").addEventListener("change",onSetorChange);
+  atualizaEqHint();
+  document.getElementById("btnEnviar").addEventListener("click",enviar);
+  ["fSolic","fEquipBusca","fDesc"].forEach(id=>{
+    document.getElementById(id).addEventListener("input",()=>clearError(id));
+  });
+}
+function clearError(id){
+  const map={fSolic:"eSolic",fSetor:"eSetor",fEquipBusca:"eEquip",fDesc:"eDesc"};
+  document.getElementById(id).classList.remove("invalid");
+  if(map[id])document.getElementById(map[id]).classList.remove("show");
+}
+function baseEquipSetor(){
+  const st=document.getElementById("fSetor").value;
+  return st?state.equipamentos.filter(e=>e.setor===st):state.equipamentos;
+}
+function atualizaEqHint(){
+  const st=document.getElementById("fSetor").value;
+  const h=document.getElementById("eqHint");
+  if(h) h.textContent=baseEquipSetor().length+" equipamentos"+(st?" no setor "+st:" cadastrados")+" — digite para afunilar e escolha na lista";
+}
+function onSetorChange(){
+  clearError("fSetor");
+  const st=document.getElementById("fSetor").value;
+  const eid=document.getElementById("fEquip").value;
+  if(eid && st && equip(eid).setor!==st){
+    document.getElementById("fEquip").value="";
+    document.getElementById("fEquipBusca").value="";
+    document.getElementById("dupArea").innerHTML="";
+  }
+  atualizaEqHint();
+  const busca=document.getElementById("fEquipBusca");
+  if(busca.value.trim().length>=2) eqSugestoes(); else {document.getElementById("eqSugList").style.display="none";}
+}
+function eqSugestoes(){
+  const inp=document.getElementById("fEquipBusca"),box=document.getElementById("eqSugList");
+  const q=inp.value.trim().toLowerCase();
+  const st=document.getElementById("fSetor").value;
+  const base=baseEquipSetor();
+  document.getElementById("fEquip").value="";
+  document.getElementById("dupArea").innerHTML="";
+  if(q.length<2 && !st){box.style.display="none";box.innerHTML="";return;}
+  const res=(q.length<2?base.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||"")):base.filter(e=>((e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")).toLowerCase().includes(q))).slice(0,30);
+  if(!res.length){box.innerHTML=`<div class="sugitem" style="cursor:default;color:var(--muted)">Nenhum equipamento encontrado — confira a TAG na etiqueta da máquina.</div>`;box.style.display="block";return;}
+  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tag}</b> · ${e.nome}<br><span class="hint" style="margin:0">${e.setor||"—"}</span></div>`).join("");
+  box.style.display="block";
+}
+function eqEscolher(id){
+  const e=equip(id);
+  document.getElementById("fEquip").value=id;
+  document.getElementById("fEquipBusca").value=e.tag+" · "+e.nome;
+  document.getElementById("eqSugList").style.display="none";
+  onEquipChange();
+}
+function onEquipChange(){
+  clearError("fEquipBusca");
+  const eid=document.getElementById("fEquip").value;
+  const e=eid?equip(eid):null;
+  // preenche setor sugerido (editável)
+  const setor=document.getElementById("fSetor");
+  if(e && e.setor){ setor.value=e.setor; clearError("fSetor"); atualizaEqHint(); }
+  // alerta de duplicados
+  const box=document.getElementById("dupArea");
+  if(!eid){box.innerHTML="";return;}
+  const ativas=ativasDoEquip(eid);
+  if(!ativas.length){box.innerHTML="";return;}
+  box.innerHTML=`<div class="alert dup"><div class="i">⚠️</div><div style="flex:1">
+    <b>Já existe ${ativas.length} ordem(ns) aberta(s) para este equipamento.</b>
+    ${ativas.map(o=>`<div class="os-mini"><b>${o.numero}</b> <span class="tag">${o.status==='aberta'?'Aguardando triagem':(o.status==='aguardando_peca'?'Aguardando peça':'Em execução')}</span><br>${o.descricaoProblema.slice(0,90)}</div>`).join("")}
+    <div style="margin-top:9px">Se o seu problema é o <b>mesmo</b>, não precisa abrir outra. Se for <b>diferente</b>, marque abaixo.</div>
+    <label class="check"><input type="checkbox" id="fForce" onchange="document.getElementById('justWrap').style.display=this.checked?'block':'none'"> É um problema diferente — quero abrir mesmo assim.</label>
+    <div id="justWrap" style="display:none;margin-top:8px">
+      <input id="fJust" placeholder="Explique a diferença (obrigatório)">
+      <div class="err" id="eJust">Explique por que é uma nova ordem.</div>
+    </div>
+  </div></div>`;
+}
+
+function enviar(){
+  let erros=0;
+  const solic=document.getElementById("fSolic");
+  const setor=document.getElementById("fSetor");
+  const eqp=document.getElementById("fEquip");
+  const eqpVis=document.getElementById("fEquipBusca");
+  const desc=document.getElementById("fDesc");
+  const mark=(el,errId,bad)=>{ if(bad){el.classList.add("invalid");document.getElementById(errId).classList.add("show");erros++;} };
+  mark(solic,"eSolic",!solic.value.trim());
+  mark(setor,"eSetor",!setor.value.trim());
+  mark(eqpVis,"eEquip",!eqp.value);
+  mark(desc,"eDesc",desc.value.trim().length<10);
+
+  // duplicados ativos
+  let relacionada=null;
+  if(eqp.value){
+    const ativas=ativasDoEquip(eqp.value);
+    if(ativas.length){
+      const force=document.getElementById("fForce");
+      if(!force||!force.checked){
+        erros++;
+        if(document.getElementById("dupArea")) document.getElementById("dupArea").scrollIntoView({behavior:"smooth",block:"center"});
+      } else {
+        const just=document.getElementById("fJust");
+        if(!just||!just.value.trim()){ if(just){just.classList.add("invalid");document.getElementById("eJust").classList.add("show");} erros++; }
+        else relacionada=ativas[0].id;
+      }
+    }
+  }
+
+  if(erros){
+    // foca o primeiro inválido
+    const first=document.querySelector(".invalid");
+    if(first) first.scrollIntoView({behavior:"smooth",block:"center"});
+    return;
+  }
+
+  const o={
+    id:uid(), numero:nextNumero(), equipamentoId:eqp.value,
+    solicitante:solic.value.trim(), setorSolicitante:setor.value.trim(),
+    descricaoProblema:desc.value.trim(), tipo:document.getElementById("fTipo").value,
+    prioridade:"media", categoria:null, status:"aberta", tecnicoId:null, prazo:null,
+    dataAbertura:todayStr(), dataInicio:null, dataConclusao:null,
+    servicoExecutado:"", pecas:"", tempoGastoHoras:null, paradaHoras:null,
+    relacionadaA:relacionada, observacoesGestor:"",
+    historico:[{data:todayStr(),evento:"OS aberta pelo solicitante"+(relacionada?" (vinculada a OS existente)":""),usuario:solic.value.trim()}]
+  };
+  state.ordens.push(o); save();
+  mostrarSucesso(o);
+}
+
+function mostrarSucesso(o){
+  const e=equip(o.equipamentoId);
+  document.getElementById("formArea").style.display="none";
+  const s=document.getElementById("successArea");
+  s.style.display="block";
+  s.innerHTML=`<div class="big">✅</div>
+    <h2>Solicitação enviada!</h2>
+    <div class="num">${o.numero}</div>
+    <p><b>${e.tag}</b> · ${e.nome}<br>O gestor da manutenção vai conferir e direcionar para a equipa.</p>
+    <button class="btn primary" onclick="novaOutra()">➕ Abrir outra OS</button>
+    <button class="btn ghost" style="margin-top:10px" onclick="window.print()">🖨 Imprimir comprovativo</button>`;
+}
+function novaOutra(){
+  document.getElementById("successArea").style.display="none";
+  const fa=document.getElementById("formArea");
+  fa.style.display="block";
+  renderForm();
+}
+
+/* início */
+mountLogo();
+load();
+renderForm();
+</script>
+</body>
+</html>
