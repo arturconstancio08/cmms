@@ -57,6 +57,24 @@
   .sugitem:last-child{border-bottom:0}
   .sugitem:hover{background:#f1f5f9}
   .field.rel{position:relative}
+  .eqrow{display:flex;gap:8px}
+  .eqrow input{flex:1}
+  .btn-lupa{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:0 15px;font-size:18px;cursor:pointer}
+  .btn-lupa:hover{border-color:var(--brand);background:#f0f9ff}
+  .pesq-ovl{position:fixed;inset:0;background:rgba(2,8,23,.55);display:flex;align-items:center;justify-content:center;padding:12px;z-index:100}
+  .pesq{background:#fff;border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:780px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+  .pesq-h{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,#0f1f38,#13325c);color:#fff;font-size:15px}
+  .pesq-x{background:none;border:0;color:#fff;font-size:24px;cursor:pointer;line-height:1}
+  .pesq-bar{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .pesq-bar input{flex:2;min-width:170px}
+  .pesq-bar select{flex:1;min-width:160px;width:auto}
+  .pesq-body{overflow:auto;flex:1;min-height:200px}
+  .pesq-t{width:100%;border-collapse:collapse;font-size:13px}
+  .pesq-t th{position:sticky;top:0;background:#eef2f7;text-align:left;padding:8px 10px;border-bottom:1.5px solid var(--line);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:#334155}
+  .pesq-t td{padding:8px 10px;border-bottom:1px solid var(--line)}
+  .pesq-t tbody tr{cursor:pointer}
+  .pesq-t tbody tr:hover{background:#e8f6fd}
+  .pesq-f{padding:8px 12px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -69,9 +87,20 @@
     <div id="formArea" class="body"></div>
     <div id="successArea" class="success" style="display:none"></div>
   </div>
-  <div class="foot">Portal de solicitação · v6.0 (base real TOTVS) · preencha os campos obrigatórios <span style="color:#dc2626">*</span></div>
+  <div class="foot">Portal de solicitação · v10.0 (base real TOTVS) · preencha os campos obrigatórios <span style="color:#dc2626">*</span></div>
 </div>
 
+<div id="eqModal" class="pesq-ovl" style="display:none" onclick="if(event.target===this)fecharPesquisa()">
+  <div class="pesq">
+    <div class="pesq-h"><b>Pesquisa Equipamento</b><button class="pesq-x" onclick="fecharPesquisa()">×</button></div>
+    <div class="pesq-bar">
+      <input id="pesqQ" placeholder="Digite a TAG (nº), o equipamento ou a descrição (ex.: 0040, FF1.02, prensa...)" oninput="pesqRender()" autocomplete="off">
+      <select id="pesqOrd" onchange="pesqRender()"><option value="tagN">Ordenar por: TAG</option><option value="tag">Ordenar por: Equipamento</option><option value="nome">Ordenar por: Descrição</option></select>
+    </div>
+    <div class="pesq-body"><table class="pesq-t"><thead><tr><th>TAG</th><th>Equipamento</th><th>Descrição</th><th>Setor</th><th>Família</th></tr></thead><tbody id="pesqRows"></tbody></table></div>
+    <div class="pesq-f"><span id="pesqInfo" class="hint" style="margin:0"></span></div>
+  </div>
+</div>
 <script src="DB_REI_dados.js"></script>
 <script>
 /* ===== armazenamento partilhado com o programa de gestão (mesmo navegador) ===== */
@@ -100,8 +129,9 @@ function tecnicosPadrao(){
    O programa de gestão expande a base completa; aqui só o necessário (mais leve no celular). */
 function expandDB(){
   const src=window.DB_REI||{equipamentos:[],ordens:[]};
-  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
-    familia:r[2]||"",centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
+  const FAM=src.familias||{};
+  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],tagN:r[6]||"",nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
+    familia:r[2]||"",familiaNome:FAM[r[2]]||r[2]||"",centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
     situacao:"Ativo",criticidade:"Y",status:"operando"}));
   const idsEq=new Set(eqs.map(e=>e.id));
   const EST_DB_LBL=["Encerrada","Cancelada","Aberta Ordem","Aprovada"];
@@ -190,7 +220,10 @@ function renderForm(){
     </div>
     <div class="field rel">
       <label class="f">Equipamento <span class="req">*</span></label>
-      <input id="fEquipBusca" placeholder="Digite a TAG ou o nome (ex.: JATO, FF1.02, torno...)" autocomplete="off">
+      <div class="eqrow">
+        <input id="fEquipBusca" placeholder="Digite a TAG (nº), o código ou o nome (ex.: 0040, FF1.02, JATO...)" autocomplete="off">
+        <button type="button" class="btn-lupa" title="Pesquisar equipamento (como no Datasul)" onclick="abrirPesquisa()">🔍</button>
+      </div>
       <input type="hidden" id="fEquip">
       <div id="eqSugList" class="suglist" style="display:none"></div>
       <div class="hint" id="eqHint"></div>
@@ -199,7 +232,7 @@ function renderForm(){
     <div id="dupArea"></div>
     <div class="field">
       <label class="f">Tipo</label>
-      <select id="fTipo"><option value="corretiva">Corretiva (quebra / falha)</option><option value="preventiva">Preventiva (revisão / inspeção)</option></select>
+      <select id="fTipo"><option value="corretiva">Corretiva (quebra / falha)</option><option value="preventiva">Preventiva (revisão / inspeção)</option><option value="melhoria">Melhoria (adaptação / instalação / upgrade)</option></select>
       <div class="hint">A categoria (mecânica/elétrica), prioridade e responsável são definidos pelo gestor.</div>
     </div>
     <div class="field">
@@ -229,7 +262,7 @@ function baseEquipSetor(){
 function atualizaEqHint(){
   const st=document.getElementById("fSetor").value;
   const h=document.getElementById("eqHint");
-  if(h) h.textContent=baseEquipSetor().length+" equipamentos"+(st?" no setor "+st:" cadastrados")+" — digite para afunilar e escolha na lista";
+  if(h) h.textContent=baseEquipSetor().length+" equipamentos"+(st?" no setor "+st:" cadastrados")+" — digite para afunilar ou toque na lupa 🔍 para pesquisar por TAG (como no Datasul)";
 }
 function onSetorChange(){
   clearError("fSetor");
@@ -244,6 +277,39 @@ function onSetorChange(){
   const busca=document.getElementById("fEquipBusca");
   if(busca.value.trim().length>=2) eqSugestoes(); else {document.getElementById("eqSugList").style.display="none";}
 }
+function abrirPesquisa(){
+  document.getElementById("eqSugList").style.display="none";
+  document.getElementById("eqModal").style.display="flex";
+  const q=document.getElementById("pesqQ");
+  const atual=document.getElementById("fEquipBusca").value;
+  q.value=atual.includes("·")?"":atual.trim();
+  pesqRender();
+  q.focus();
+}
+function fecharPesquisa(){document.getElementById("eqModal").style.display="none";}
+function pesqRender(){
+  const q=(document.getElementById("pesqQ").value||"").trim().toLowerCase();
+  const ord=document.getElementById("pesqOrd").value;
+  const base=baseEquipSetor(); // respeita o setor escolhido no formulário
+  let list=q?base.filter(e=>((e.tagN||"")+" "+(e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")).toLowerCase().includes(q)):base.slice();
+  const soNum=/^\d+$/.test(q);
+  const qn=soNum?String(parseInt(q,10)):"";
+  const ehPref=e=>soNum?(!!e.tagN&&(e.tagN.replace(/^0+/,"")).indexOf(qn)===0):((e.tag||"").toLowerCase().indexOf(q)===0);
+  const cmp=(a,b)=>{
+    if(ord==="tagN"){const x=a.tagN?parseInt(a.tagN,10):1e9,y=b.tagN?parseInt(b.tagN,10):1e9;return x-y||(a.tag||"").localeCompare(b.tag||"");}
+    const key=(ord==="nome")?"nome":"tag";return (a[key]||"").localeCompare(b[key]||"");
+  };
+  const pref=q?list.filter(ehPref):[];
+  const rest=q?list.filter(e=>!ehPref(e)):list;
+  const exato=e=>soNum&&!!e.tagN&&e.tagN.replace(/^0+/,"")===qn;
+  pref.sort((a,b)=>((exato(a)?0:1)-(exato(b)?0:1))||cmp(a,b));rest.sort(cmp);
+  list=pref.concat(rest);
+  const MAX=150;
+  document.getElementById("pesqRows").innerHTML=list.slice(0,MAX).map(e=>`<tr onclick="pesqEscolher('${e.id}')"><td style="white-space:nowrap"><b>${e.tagN||"—"}</b></td><td style="white-space:nowrap">${e.tag}</td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.familiaNome||e.familia||"—"}</td></tr>`).join("")||`<tr><td colspan="5" style="color:var(--muted);padding:18px">Nenhum equipamento encontrado — confira a TAG na etiqueta da máquina.</td></tr>`;
+  const st=document.getElementById("fSetor").value;
+  document.getElementById("pesqInfo").textContent=list.length+" equipamento(s)"+(st?" no setor "+st:"")+(list.length>MAX?" — mostrando os primeiros "+MAX+", refine a busca":"");
+}
+function pesqEscolher(id){fecharPesquisa();eqEscolher(id);}
 function eqSugestoes(){
   const inp=document.getElementById("fEquipBusca"),box=document.getElementById("eqSugList");
   const q=inp.value.trim().toLowerCase();
@@ -252,9 +318,9 @@ function eqSugestoes(){
   document.getElementById("fEquip").value="";
   document.getElementById("dupArea").innerHTML="";
   if(q.length<2 && !st){box.style.display="none";box.innerHTML="";return;}
-  const res=(q.length<2?base.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||"")):base.filter(e=>((e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")).toLowerCase().includes(q))).slice(0,30);
+  const res=(q.length<2?base.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||"")):base.filter(e=>((e.tagN||"")+" "+(e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")).toLowerCase().includes(q))).slice(0,30);
   if(!res.length){box.innerHTML=`<div class="sugitem" style="cursor:default;color:var(--muted)">Nenhum equipamento encontrado — confira a TAG na etiqueta da máquina.</div>`;box.style.display="block";return;}
-  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tag}</b> · ${e.nome}<br><span class="hint" style="margin:0">${e.setor||"—"}</span></div>`).join("");
+  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tagN?"TAG "+e.tagN+" · ":""}${e.tag}</b> · ${e.nome}<br><span class="hint" style="margin:0">${e.setor||"—"}</span></div>`).join("");
   box.style.display="block";
 }
 function eqEscolher(id){

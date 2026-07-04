@@ -53,7 +53,7 @@
   .kpi .bar{position:absolute;left:0;top:0;bottom:0;width:5px}
   .kpi.k-open .bar{background:var(--info)} .kpi.k-exec .bar{background:var(--brand2)}
   .kpi.k-done .bar{background:var(--ok)} .kpi.k-late .bar{background:var(--bad)}
-  .kpi.k-mttr .bar{background:var(--mec)} .kpi.k-back .bar{background:var(--warn)}
+  .kpi.k-mttr .bar{background:var(--mec)} .kpi.k-back .bar{background:var(--warn)} .kpi.k-peca .bar{background:#d97706}
 
   .row{display:flex;gap:16px;flex-wrap:wrap}
   .col{flex:1;min-width:280px}
@@ -115,6 +115,8 @@
   /* Filters bar */
   .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px}
   .filters .field{margin:0;min-width:150px}
+  .pesq-t tbody tr{cursor:pointer}
+  .pesq-t tbody tr:hover{background:#e8f6fd}
   .suglist{position:absolute;z-index:60;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 26px rgba(2,6,23,.14);max-height:290px;overflow:auto;margin-top:4px}
   .sugitem{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
   .sugitem:last-child{border-bottom:0}
@@ -191,7 +193,7 @@
   <aside id="sidebar">
     <div class="brand" id="brandBox"></div>
     <nav id="nav"></nav>
-    <div class="foot">REI Auto Parts · CMMS Manutenção<br>Programa de Gestão · v6.0 (dados reais TOTVS) · <span id="yr"></span></div>
+    <div class="foot">REI Auto Parts · CMMS Manutenção<br>Programa de Gestão · v13.0 (dados reais TOTVS) · <span id="yr"></span></div>
   </aside>
 
   <div id="main">
@@ -228,8 +230,9 @@ const EST_DB_LBL=["Encerrada","Cancelada","Aberta Ordem","Aprovada"];
 
 function expandDB(){
   const src=window.DB_REI||{equipamentos:[],ordens:[]};
-  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
-    familia:r[2]||"",centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
+  const FAM=src.familias||{};
+  const eqs=src.equipamentos.map(r=>({id:"q_"+r[0],db:true,tag:r[0],tagN:r[6]||"",nome:r[1]||"",setor:galpaoDoTag(r[0]),area:(r[0]||"").split(".")[0],
+    familia:r[2]||"",familiaNome:(FAM[r[2]]||r[2]||""),centroCusto:r[3]?String(r[3]):"",planejador:r[4]||"",tipoEquipto:r[5]||"",
     situacao:"Ativo",criticidade:"Y",status:"operando"}));
   const idsEq=new Set(eqs.map(e=>e.id));
   const catDe=new Map(eqs.map(e=>[e.id,tipoParaCategoria(e.tipoEquipto)||null]));
@@ -280,6 +283,7 @@ function load(){
     ordens:[...mapO.values()]};
   // Programa de gestão: acesso direto como Gestor (sem tela de login)
   state.currentUser = {perfil:"gestor", tecnicoId:null, nome:"Gestor da Manutenção"};
+  _eqCache=new Map();
   normalizeEquip();
 }
 
@@ -336,11 +340,14 @@ function tecnicosPadrao(){
 }
 
 /* ===================== HELPERS ===================== */
+let _eqCache=new Map();
 function equip(id){
+  if(_eqCache.has(id)) return _eqCache.get(id);
   const f=state.equipamentos.find(e=>e.id===id);
-  if(f) return f;
+  if(f){ _eqCache.set(id,f); return f; }
   const code=(typeof id==="string"&&id.indexOf("x:")===0)?id.slice(2):null;
-  return {id:id||"",tag:code||"—",nome:code?"(local/setor sem cadastro)":"(sem equipamento)",setor:code?galpaoDoTag(code):"—",criticidade:"Y",tipoEquipto:"",situacao:"—",status:"operando"};
+  const fb={id:id||"",tag:code||"—",tagN:"",nome:code?"(local/setor sem cadastro)":"(sem equipamento)",setor:code?galpaoDoTag(code):"—",familia:"",familiaNome:"",criticidade:"Y",tipoEquipto:"",situacao:"—",status:"operando"};
+  _eqCache.set(id,fb); return fb;
 }
 function tec(id){ return state.tecnicos.find(t=>t.id===id); }
 function ordemById(id){ return state.ordens.find(o=>o.id===id); }
@@ -350,6 +357,10 @@ function todayStr(){ return new Date().toISOString().slice(0,10); }
 function fmt(dstr){ if(!dstr) return "—"; const p=dstr.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
 function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 function nextNumero(){ const num="OS-2026-"+String(state.proximoNumero).padStart(4,"0"); state.proximoNumero++; return num; }
+function catalogo(nome){ return (window.DB_REI&&window.DB_REI[nome])||[]; }
+function catOpts(nome,sel){ return `<option value="">— selecione —</option>`+catalogo(nome).map(x=>`<option value="${x[0]}"${sel===x[0]?" selected":""}>${x[0]} — ${x[1]}</option>`).join(""); }
+function catLbl(nome,cod){ if(!cod) return "—"; const it=catalogo(nome).find(x=>x[0]===cod); return it?(cod+" — "+it[1]):cod; }
+function fmtDT(v){ if(!v) return "—"; const [d,h]=v.split("T"); return fmt(d)+(h?" "+h.slice(0,5):""); }
 function addHist(o,evento,usuario){ o.historico.push({data:todayStr(),evento,usuario:usuario||"Gestor"}); }
 
 function statusTag(o){
@@ -440,11 +451,18 @@ function render(){
 let charts={};
 function destroyCharts(){ Object.values(charts).forEach(c=>c&&c.destroy()); charts={}; }
 
-let dashPeriodo={ano:"",mes:""};
+let dashPeriodo={ano:String(new Date().getFullYear()),mes:String(new Date().getMonth()+1).padStart(2,"0")}; // abre no mês atual
 const MESES_LBL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 function dashFiltrar(){ dashPeriodo={ano:val("dAno"),mes:val("dMes")}; render(); }
 function dashLimpar(){ dashPeriodo={ano:"",mes:""}; render(); }
-function irParaOrdensEquip(id){ filtros={busca:"",status:"",categoria:"",equip:id}; ordensLimit=200; currentView="ordens"; render(); }
+function dashMesAtual(){ const n=new Date(); dashPeriodo={ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
+function dashAnoAtual(){ dashPeriodo={ano:String(new Date().getFullYear()),mes:""}; render(); }
+function dashModo(){ const n=new Date(),a=String(n.getFullYear()),m=String(n.getMonth()+1).padStart(2,"0");
+  if(dashPeriodo.ano===a&&dashPeriodo.mes===m) return "mes";
+  if(dashPeriodo.ano===a&&!dashPeriodo.mes) return "ano";
+  if(!dashPeriodo.ano&&!dashPeriodo.mes) return "geral";
+  return ""; }
+function irParaOrdensEquip(id){ filtros={busca:"",status:"",categoria:"",equip:id,setor:""}; ordensLimit=200; currentView="ordens"; render(); }
 function viewDashboard(c){
   destroyCharts();
   const anos=[...new Set(state.ordens.map(o=>(o.dataAbertura||"").slice(0,4)).filter(Boolean))].sort();
@@ -455,7 +473,8 @@ function viewDashboard(c){
     return true;
   });
   const abertas=O.filter(o=>o.status==="aberta").length;
-  const exec=O.filter(o=>o.status==="execucao"||o.status==="aguardando_peca").length;
+  const exec=O.filter(o=>o.status==="execucao").length;
+  const aguardPeca=O.filter(o=>o.status==="aguardando_peca").length;
   const concl=O.filter(o=>o.status==="concluida");
   const atrasadas=O.filter(isOverdue).length;
   const backlog=O.filter(isActive).length;
@@ -470,13 +489,18 @@ function viewDashboard(c){
       <div class="filters">
         <div class="field"><label class="f">Ano</label><select id="dAno" onchange="dashFiltrar()"><option value="">Todos</option>${anos.map(a=>`<option value="${a}"${dashPeriodo.ano===a?" selected":""}>${a}</option>`).join("")}</select></div>
         <div class="field"><label class="f">Mês</label><select id="dMes" onchange="dashFiltrar()"><option value="">Todos</option>${MESES_LBL.map((m,i)=>{const v=String(i+1).padStart(2,"0");return `<option value="${v}"${dashPeriodo.mes===v?" selected":""}>${m}</option>`;}).join("")}</select></div>
-        ${periodoAtivo?`<button class="btn sm" onclick="dashLimpar()">✕ Limpar período</button>`:""}
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <button class="btn sm ${dashModo()==="mes"?"primary":""}" onclick="dashMesAtual()" title="Indicadores do mês corrente">Mês atual</button>
+          <button class="btn sm ${dashModo()==="ano"?"primary":""}" onclick="dashAnoAtual()" title="Acumulado do ano corrente">Ano atual</button>
+          <button class="btn sm ${dashModo()==="geral"?"primary":""}" onclick="dashLimpar()" title="Histórico completo, sem filtro">Geral</button>
+        </div>
         <span class="hint" style="align-self:center"><b>${O.length}</b> OS ${periodoAtivo?"no período selecionado":"no histórico completo"} — todos os indicadores abaixo respeitam este filtro</span>
       </div>
     </div>
     <div class="grid kpis" style="margin-bottom:18px">
       <div class="kpi k-open" style="cursor:pointer" title="Ver OS abertas" onclick="irParaOrdens('aberta')"><div class="bar"></div><div class="lbl">Abertas ›</div><div class="val">${abertas}</div><div class="sub">aguardando triagem</div></div>
-      <div class="kpi k-exec" style="cursor:pointer" title="Ver OS em execução" onclick="irParaOrdens('emexec')"><div class="bar"></div><div class="lbl">Em execução ›</div><div class="val">${exec}</div><div class="sub">incl. aguardando peça</div></div>
+      <div class="kpi k-exec" style="cursor:pointer" title="Ver OS em execução" onclick="irParaOrdens('execucao')"><div class="bar"></div><div class="lbl">Em execução ›</div><div class="val">${exec}</div><div class="sub">atribuídas e em andamento</div></div>
+      <div class="kpi k-peca" style="cursor:pointer" title="Ver OS aguardando peça" onclick="irParaOrdens('aguardando_peca')"><div class="bar"></div><div class="lbl">Aguard. peça ›</div><div class="val">${aguardPeca}</div><div class="sub">paradas por material</div></div>
       <div class="kpi k-late" style="cursor:pointer" title="Ver OS atrasadas" onclick="irParaOrdens('atrasada')"><div class="bar"></div><div class="lbl">Atrasadas ›</div><div class="val">${atrasadas}</div><div class="sub">prazo vencido</div></div>
       <div class="kpi k-done" style="cursor:pointer" title="Ver OS concluídas" onclick="irParaOrdens('concluida')"><div class="bar"></div><div class="lbl">Concluídas ›</div><div class="val">${concl.length}</div><div class="sub">${periodoAtivo?"no período":"total histórico"}</div></div>
       <div class="kpi k-back" style="cursor:pointer" title="Ver OS ativas (backlog)" onclick="irParaOrdens('ativas')"><div class="bar"></div><div class="lbl">Backlog ›</div><div class="val">${backlog}</div><div class="sub">OS ativas em aberto</div></div>
@@ -551,34 +575,80 @@ function viewDashboard(c){
 }
 
 /* ===================== LISTA DE ORDENS ===================== */
-let filtros={busca:"",status:"",categoria:"",equip:""};
+let filtros={busca:"",status:"",categoria:"",equip:"",setor:""};
 function viewOrdens(c){
   destroyCharts();
+  const setores=[...new Set(state.equipamentos.map(e=>e.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
+  const eqSel=filtros.equip?equip(filtros.equip):null;
   c.innerHTML=`
     <div class="filters card" style="padding:14px">
-      <div class="field"><label class="f">Buscar</label><input id="fBusca" placeholder="Nº, problema, solicitante..." value="${filtros.busca}"></div>
-      <div class="field"><label class="f">Situação</label><select id="fStatus">
+      <div class="field" style="min-width:240px;flex:1"><label class="f">Buscar (dinâmico)</label><input id="fBusca" placeholder="Nº OS, TAG, equipamento, problema, solicitante, setor..." value="${filtros.busca}" oninput="buscaLive()"></div>
+      <div class="field"><label class="f">Situação</label><select id="fStatus" onchange="aplicarFiltros()">
         <option value="">Todas</option>${Object.keys(STATUS).map(s=>`<option value="${s}">${STATUS[s].short}</option>`).join("")}
         <option value="emexec">Em execução (todas)</option>
         <option value="ativas">Ativas (backlog)</option>
         <option value="atrasada">Atrasadas</option></select></div>
-      <div class="field"><label class="f">Categoria</label><select id="fCat"><option value="">Todas</option><option value="mecanica">Mecânica</option><option value="eletrica">Elétrica</option><option value="none">A definir</option></select></div>
-      <div class="field"><label class="f">Equipamento</label><select id="fEquip"><option value="">Todos</option>${filtros.equip&&!state.equipamentos.some(e=>e.id===filtros.equip)?`<option value="${filtros.equip}">${equip(filtros.equip).tag} · ${equip(filtros.equip).nome}</option>`:""}${state.equipamentos.map(e=>`<option value="${e.id}">${e.tag} · ${e.nome}</option>`).join("")}</select></div>
-      <button class="btn" onclick="aplicarFiltros()">Filtrar</button>
-      <button class="btn" onclick="limparFiltros()">Limpar</button>
+      <div class="field"><label class="f">Categoria</label><select id="fCat" onchange="aplicarFiltros()"><option value="">Todas</option><option value="mecanica">Mecânica</option><option value="eletrica">Elétrica</option><option value="none">A definir</option></select></div>
+      <div class="field"><label class="f">Setor</label><select id="fSetorOrd" onchange="aplicarFiltros()"><option value="">Todos</option>${setores.map(x=>`<option value="${x}"${filtros.setor===x?" selected":""}>${x}</option>`).join("")}</select></div>
+      <div class="field" style="min-width:230px"><label class="f">Equipamento</label>
+        <div style="display:flex;gap:6px">
+          <input id="fEquipTxt" readonly placeholder="Todos" value="${eqSel?(eqSel.tagN?"TAG "+eqSel.tagN+" · ":"")+eqSel.tag+" · "+eqSel.nome:""}" style="cursor:pointer;background:#f8fafc" onclick="abrirPesquisaOrd()" title="Clique para pesquisar (TAG, código, descrição)">
+          <button class="btn sm" onclick="abrirPesquisaOrd()" title="Pesquisar equipamento">🔍</button>
+          ${filtros.equip?`<button class="btn sm" onclick="limparEquipFiltro()" title="Remover filtro de equipamento">✕</button>`:""}
+        </div>
+      </div>
+      <button class="btn" onclick="limparFiltros()">Limpar tudo</button>
     </div>
     <div id="ordensTable"></div>`;
   document.getElementById("fStatus").value=filtros.status;
   document.getElementById("fCat").value=filtros.categoria;
-  document.getElementById("fEquip").value=filtros.equip;
   renderOrdensTable();
 }
-function irParaOrdens(status){ filtros={busca:"",status:status||"",categoria:"",equip:""}; currentView="ordens"; render(); }
-function aplicarFiltros(){filtros={busca:document.getElementById("fBusca").value.toLowerCase(),status:document.getElementById("fStatus").value,categoria:document.getElementById("fCat").value,equip:document.getElementById("fEquip").value};ordensLimit=200;renderOrdensTable();}
-function limparFiltros(){filtros={busca:"",status:"",categoria:"",equip:""};viewOrdens(document.getElementById("content"));}
+let _bt=null;
+function buscaLive(){ clearTimeout(_bt); _bt=setTimeout(aplicarFiltros,250); }
+function limparEquipFiltro(){ filtros.equip=""; viewOrdens(document.getElementById("content")); }
+function abrirPesquisaOrd(){
+  openModal("Pesquisa Equipamento",`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input id="pqQ" placeholder="TAG (nº), código, descrição, setor ou família (ex.: 0040, FF1.02, prensa...)" style="flex:2;min-width:200px" oninput="pqRender()" autocomplete="off">
+      <select id="pqOrd" style="flex:1;min-width:170px" onchange="pqRender()"><option value="tagN">Ordenar por: TAG</option><option value="tag">Ordenar por: Equipamento</option><option value="nome">Ordenar por: Descrição</option></select>
+    </div>
+    <div class="table-wrap" style="max-height:52vh;overflow:auto"><table class="pesq-t"><thead><tr><th>TAG</th><th>Equipamento</th><th>Descrição</th><th>Setor</th><th>Família</th></tr></thead><tbody id="pqRows"></tbody></table></div>
+    <div class="hint" id="pqInfo" style="margin-top:8px"></div>`,[],"wide");
+  pqRender();
+  const q=document.getElementById("pqQ"); if(q) q.focus();
+}
+window.pqRender=function(){
+  const q=(val("pqQ")||"").toLowerCase();
+  const ord=val("pqOrd")||"tagN";
+  const st=filtros.setor;
+  const base=st?state.equipamentos.filter(e=>e.setor===st):state.equipamentos;
+  let list=q?base.filter(e=>((e.tagN||"")+" "+(e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")).toLowerCase().includes(q)):base.slice();
+  const soNum=/^\d+$/.test(q);
+  const qn=soNum?String(parseInt(q,10)):"";
+  const ehPref=e=>soNum?(!!e.tagN&&(e.tagN.replace(/^0+/,"")).indexOf(qn)===0):((e.tag||"").toLowerCase().indexOf(q)===0);
+  const exato=e=>soNum&&!!e.tagN&&e.tagN.replace(/^0+/,"")===qn;
+  const cmp=(a,b)=>{
+    if(ord==="tagN"){const x=a.tagN?parseInt(a.tagN,10):1e9,y=b.tagN?parseInt(b.tagN,10):1e9;return x-y||(a.tag||"").localeCompare(b.tag||"");}
+    const key=(ord==="nome")?"nome":"tag";return (a[key]||"").localeCompare(b[key]||"");
+  };
+  const pref=q?list.filter(ehPref):[];
+  const rest=q?list.filter(e=>!ehPref(e)):list;
+  pref.sort((a,b)=>((exato(a)?0:1)-(exato(b)?0:1))||cmp(a,b));rest.sort(cmp);
+  list=pref.concat(rest);
+  const MAX=150;
+  const rowsEl=document.getElementById("pqRows"); if(!rowsEl) return;
+  rowsEl.innerHTML=list.slice(0,MAX).map(e=>`<tr onclick="pqEscolher('${e.id}')"><td style="white-space:nowrap"><b>${e.tagN||"—"}</b></td><td style="white-space:nowrap">${e.tag}</td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.familiaNome||e.familia||"—"}</td></tr>`).join("")||`<tr><td colspan="5" style="color:var(--muted);padding:16px">Nenhum equipamento encontrado.</td></tr>`;
+  document.getElementById("pqInfo").textContent=list.length+" equipamento(s)"+(st?" no setor "+st:"")+(list.length>MAX?" — mostrando os primeiros "+MAX+", refine a busca":"");
+};
+window.pqEscolher=function(id){ closeModal(); filtros.equip=id; ordensLimit=200; viewOrdens(document.getElementById("content")); };
+function irParaOrdens(status){ filtros={busca:"",status:status||"",categoria:"",equip:"",setor:""}; currentView="ordens"; render(); }
+function aplicarFiltros(){filtros.busca=(val("fBusca")||"").toLowerCase();filtros.status=val("fStatus");filtros.categoria=val("fCat");filtros.setor=val("fSetorOrd");ordensLimit=200;renderOrdensTable();}
+function limparFiltros(){filtros={busca:"",status:"",categoria:"",equip:"",setor:""};viewOrdens(document.getElementById("content"));}
 function filtraOrdens(){
   return state.ordens.filter(o=>{
-    if(filtros.busca){const s=(o.numero+" "+o.descricaoProblema+" "+(o.solicitante||"")+" "+equip(o.equipamentoId).nome).toLowerCase();if(!s.includes(filtros.busca))return false;}
+    if(filtros.busca){const e=equip(o.equipamentoId);const s=(o.numero+" "+o.descricaoProblema+" "+(o.solicitante||"")+" "+(o.servicoExecutado||"")+" "+e.tag+" "+(e.tagN||"")+" "+e.nome+" "+(e.setor||"")+" "+(e.familiaNome||e.familia||"")).toLowerCase();if(!s.includes(filtros.busca))return false;}
+    if(filtros.setor){if(equip(o.equipamentoId).setor!==filtros.setor)return false;}
     if(filtros.status==="atrasada"){if(!isOverdue(o))return false;}
     else if(filtros.status==="ativas"){if(!isActive(o))return false;}
     else if(filtros.status==="emexec"){if(!(o.status==="execucao"||o.status==="aguardando_peca"))return false;}
@@ -722,30 +792,59 @@ function viewTriagem(c){
 }
 
 /* ===================== EQUIPAMENTOS ===================== */
+let eqFiltros={busca:"",setor:""};
+let eqLimit=300;
+let _eqbt=null;
+function eqBuscaLive(){ clearTimeout(_eqbt); _eqbt=setTimeout(()=>{eqFiltros.busca=(val("eqBusca")||"").toLowerCase();eqFiltros.setor=val("eqSetorF");eqLimit=300;renderEquipTable();},250); }
+function eqAplicar(){ eqFiltros.busca=(val("eqBusca")||"").toLowerCase(); eqFiltros.setor=val("eqSetorF"); eqLimit=300; renderEquipTable(); }
+function eqLimpar(){ eqFiltros={busca:"",setor:""}; eqLimit=300; viewEquipamentos(document.getElementById("content")); }
+function maisEquip(){ eqLimit+=300; renderEquipTable(); }
 function viewEquipamentos(c){
   destroyCharts();
   const devidas=preventivasDevidas().length;
+  const setores=[...new Set(state.equipamentos.map(e=>e.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   c.innerHTML=`<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap"><h3 style="margin:0;flex:1">⚙️ Equipamentos (${state.equipamentos.length})</h3>
     ${devidas?`<button class="btn warn sm" onclick="gerarPreventivas()">🔧 Gerar ${devidas} preventiva(s) por contador</button>`:""}
     <button class="btn primary sm" onclick="editEquip()">+ Novo equipamento</button></div>
-    <div class="filters" style="margin-bottom:10px"><div class="field" style="margin:0;min-width:260px"><input id="eqBusca" placeholder="Buscar TAG, descrição, setor, família..." oninput="renderEquipTable()"></div></div>
+    <div class="filters" style="margin-bottom:10px">
+      <div class="field" style="margin:0;min-width:280px;flex:1"><label class="f">Buscar (dinâmico)</label><input id="eqBusca" placeholder="TAG (nº), código, descrição, setor, família, centro de custo..." value="${eqFiltros.busca}" oninput="eqBuscaLive()"></div>
+      <div class="field" style="margin:0"><label class="f">Setor</label><select id="eqSetorF" onchange="eqAplicar()"><option value="">Todos</option>${setores.map(x=>`<option value="${x}"${eqFiltros.setor===x?" selected":""}>${x}</option>`).join("")}</select></div>
+      <button class="btn" onclick="eqLimpar()">Limpar</button>
+    </div>
     <div id="equipTable"></div></div>`;
   renderEquipTable();
 }
 function renderEquipTable(){
-  const bq=document.getElementById("eqBusca"); const q=(bq?bq.value:"").toLowerCase();
-  let list=state.equipamentos.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||""));
-  if(q) list=list.filter(e=>(e.tag+" "+e.nome+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.centroCusto||"")).toLowerCase().includes(q));
+  const q=eqFiltros.busca;
+  let list=state.equipamentos.slice();
+  if(eqFiltros.setor) list=list.filter(e=>e.setor===eqFiltros.setor);
+  if(q) list=list.filter(e=>((e.tagN||"")+" "+e.tag+" "+e.nome+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")+" "+(e.centroCusto||"")).toLowerCase().includes(q));
+  const soNum=/^\d+$/.test(q);
+  if(soNum){
+    const qn=String(parseInt(q,10));
+    const ehPref=e=>!!e.tagN&&(e.tagN.replace(/^0+/,"")).indexOf(qn)===0;
+    const exato=e=>!!e.tagN&&e.tagN.replace(/^0+/,"")===qn;
+    const pref=list.filter(ehPref),rest=list.filter(e=>!ehPref(e));
+    const cmp=(a,b)=>(a.tag||"").localeCompare(b.tag||"");
+    pref.sort((a,b)=>((exato(a)?0:1)-(exato(b)?0:1))||cmp(a,b));rest.sort(cmp);
+    list=pref.concat(rest);
+  } else {
+    list.sort((a,b)=>(a.tag||"").localeCompare(b.tag||""));
+  }
+  const total=list.length;
   const el=document.getElementById("equipTable");
-  if(!list.length){el.innerHTML=`<div class="empty"><div class="big">🔍</div>Nenhum equipamento encontrado.</div>`;return;}
-  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>TAG</th><th>Descrição</th><th>Setor</th><th>Tipo</th><th>Crit.</th><th>Situação</th><th>Estado</th><th>OS ativas</th><th></th></tr></thead><tbody>
-    ${list.map(e=>{const at=ordensAtivasDoEquip(e.id).length;return `<tr onclick="editEquip('${e.id}')">
-      <td><b>${e.tag}</b></td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.tipoEquipto||"—"}</td>
+  if(!total){el.innerHTML=`<div class="empty"><div class="big">🔍</div>Nenhum equipamento encontrado.</div>`;return;}
+  const vis=list.slice(0,eqLimit);
+  el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>TAG</th><th>Equipamento</th><th>Descrição</th><th>Setor</th><th>Família</th><th>Tipo</th><th>Crit.</th><th>Situação</th><th>Estado</th><th>OS ativas</th><th></th></tr></thead><tbody>
+    ${vis.map(e=>{const at=ordensAtivasDoEquip(e.id).length;return `<tr onclick="editEquip('${e.id}')">
+      <td><b>${e.tagN||"—"}</b></td><td style="white-space:nowrap">${e.tag}</td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.familiaNome||e.familia||"—"}</td><td>${e.tipoEquipto||"—"}</td>
       <td>${critTag(e.criticidade)}</td><td><span class="tag ${e.situacao==='Ativo'?'t-concluida':'t-cancelada'}">${e.situacao||'Ativo'}</span></td>
       <td>${e.status==="operando"?'<span class="tag t-concluida">Operando</span>':'<span class="tag t-late">Parado</span>'}</td>
       <td>${at?`<span class="tag t-execucao">${at}</span>`:"0"}</td>
       <td><button class="btn sm" onclick="event.stopPropagation();editEquip('${e.id}')">Editar</button></td></tr>`;}).join("")}
-  </tbody></table></div><div class="hint" style="margin-top:8px">${list.length} equipamento(s)</div>`;
+  </tbody></table></div><div class="hint" style="margin-top:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span>${total} equipamento(s)${total>vis.length?` · mostrando os primeiros ${vis.length}`:""}</span>
+    ${total>vis.length?`<button class="btn sm" onclick="maisEquip()">Mostrar mais 300</button>`:""}</div>`;
 }
 function eqTab(n){
   document.querySelectorAll('.eqtab').forEach((t,i)=>t.classList.toggle('active',i===n));
@@ -974,8 +1073,8 @@ function gerarRelatorio(){
 }
 function exportCSV(){
   const list=relatorioDados();
-  const head=["Numero","DataAbertura","DataConclusao","Equipamento_TAG","Equipamento_Nome","Setor","Tipo","Categoria","Prioridade","Situacao","Solicitante","Responsavel","Problema","ServicoExecutado","Pecas","HorasTrabalho","HorasParada","Prazo"];
-  const rows=list.map(o=>{const e=equip(o.equipamentoId);const t=o.tecnicoId?tec(o.tecnicoId).nome:"";return [o.numero,o.dataAbertura,o.dataConclusao||"",e.tag,e.nome,e.setor,TIPOS[o.tipo],o.categoria?CATEGORIAS[o.categoria]:"",PRIORIDADES[o.prioridade],STATUS[o.status].short,o.solicitante||"",t,o.descricaoProblema,o.servicoExecutado||"",o.pecas||"",o.tempoGastoHoras||"",o.paradaHoras||"",o.prazo||""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";");});
+  const head=["Numero","DataAbertura","DataConclusao","Equipamento_TAG","Equipamento_Nome","Setor","Tipo","Categoria","Prioridade","Situacao","Solicitante","Responsavel","Problema","ServicoExecutado","Pecas","HorasTrabalho","HorasParada","ParadaEm","RetornoEm","Sintoma","Causa","Intervencao","Prazo"];
+  const rows=list.map(o=>{const e=equip(o.equipamentoId);const t=o.tecnicoId?tec(o.tecnicoId).nome:"";return [o.numero,o.dataAbertura,o.dataConclusao||"",e.tag,e.nome,e.setor,TIPOS[o.tipo],o.categoria?CATEGORIAS[o.categoria]:"",PRIORIDADES[o.prioridade],STATUS[o.status].short,o.solicitante||"",t,o.descricaoProblema,o.servicoExecutado||"",o.pecas||"",o.tempoGastoHoras||"",o.paradaHoras||"",o.paradaEm||"",o.retornoEm||"",o.sintoma?catLbl("sintomas",o.sintoma):"",o.causa?catLbl("causas",o.causa):"",o.intervencao?catLbl("intervencoes",o.intervencao):"",o.prazo||""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";");});
   const csv="﻿"+head.join(";")+"\n"+rows.join("\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="relatorio_manutencao.csv";a.click();
   toast("CSV exportado ("+list.length+" linhas).");
@@ -1027,7 +1126,12 @@ function openOrdem(id){
     </div>
     <div class="field" style="margin-top:14px"><div class="dl">Problema reportado</div><div style="background:var(--panel2);border-radius:8px;padding:10px;margin-top:4px">${o.descricaoProblema}</div></div>
     ${o.observacoesGestor?`<div class="field"><div class="dl">Observações do gestor</div><div style="background:#fffbeb;border-radius:8px;padding:10px;margin-top:4px">${o.observacoesGestor}</div></div>`:""}
-    ${o.servicoExecutado?`<div class="field"><div class="dl">Serviço executado</div><div style="background:#f0fdf4;border-radius:8px;padding:10px;margin-top:4px">${o.servicoExecutado}<br><span class="hint">Peças: ${o.pecas||"—"} · Tempo: ${o.tempoGastoHoras||"—"}h · Parada: ${o.paradaHoras||"—"}h</span></div></div>`:""}
+    ${o.servicoExecutado?`<div class="field"><div class="dl">Serviço executado</div><div style="background:#f0fdf4;border-radius:8px;padding:10px;margin-top:4px">${o.servicoExecutado}<br><span class="hint">Peças: ${o.pecas||"—"} · Tempo: ${o.tempoGastoHoras||"—"}h · Parada: ${o.paradaHoras||"—"}h${o.paradaEm?` (${fmtDT(o.paradaEm)} → ${fmtDT(o.retornoEm)})`:""}</span></div></div>`:""}
+    ${(o.sintoma||o.causa||o.intervencao)?`<div class="detail-grid" style="margin-top:10px">
+      <div><div class="dl">Sintoma</div><div class="dv" style="font-size:13px">${catLbl("sintomas",o.sintoma)}</div></div>
+      <div><div class="dl">Causa</div><div class="dv" style="font-size:13px">${catLbl("causas",o.causa)}</div></div>
+      <div><div class="dl">Intervenção</div><div class="dv" style="font-size:13px">${catLbl("intervencoes",o.intervencao)}</div></div>
+    </div>`:""}
     <div class="field"><div class="dl">Histórico</div><ul class="timeline" style="margin-top:8px">${o.historico.map(h=>`<li><div>${h.evento}</div><div class="tmeta">${fmt(h.data)} · ${h.usuario}</div></li>`).join("")}</ul></div>
   `;
   const acoes=[];
@@ -1072,26 +1176,44 @@ function triarModal(id){
   if(_catSug)window._trMakeTec(_catSug,o.tecnicoId||"");
 }
 
+window.calcParada=function(){
+  const a=val("cParou"),b=val("cVoltou");
+  if(a&&b){ const h=(new Date(b)-new Date(a))/3600000; if(h>=0){ document.getElementById("cParada").value=Math.round(h*2)/2; } }
+};
 function concluirModal(id){
   const o=ordemById(id);
   openModal("Concluir OS — "+o.numero,`
     <div class="alert info" style="margin-bottom:14px"><div class="ai">📝</div><div>Preencha o que foi realizado. Esta é a folha que o técnico entrega ao gestor.</div></div>
-    <div class="field"><label class="f">Serviço executado *</label><textarea id="cServ" placeholder="Descreva o que foi feito, causa identificada, ações...">${o.servicoExecutado||""}</textarea></div>
+    <div class="field"><label class="f">Serviço executado *</label><textarea id="cServ" placeholder="Etapas da execução · recursos/materiais usados · desafios ou erro operacional · resultado final">${o.servicoExecutado||""}</textarea></div>
+    <div class="form-grid">
+      <div class="field"><label class="f">Sintoma (o que a máquina apresentou)</label><select id="cSint">${catOpts("sintomas",o.sintoma)}</select></div>
+      <div class="field"><label class="f">Causa (por que aconteceu)</label><select id="cCausa">${catOpts("causas",o.causa)}</select></div>
+    </div>
+    <div class="field"><label class="f">Intervenção (o que foi feito para resolver)</label><select id="cInterv">${catOpts("intervencoes",o.intervencao)}</select></div>
+    <div class="form-grid">
+      <div class="field"><label class="f">Máquina parou em (data e hora)</label><input type="datetime-local" id="cParou" value="${o.paradaEm||""}" onchange="calcParada()"></div>
+      <div class="field"><label class="f">Máquina voltou em (data e hora)</label><input type="datetime-local" id="cVoltou" value="${o.retornoEm||""}" onchange="calcParada()"></div>
+    </div>
     <div class="field"><label class="f">Peças / materiais utilizados</label><input id="cPecas" value="${o.pecas||""}" placeholder="Ex.: Rolamento 6204 (2), Correia A-50 (1)"></div>
     <div class="form-grid">
       <div class="field"><label class="f">Tempo de trabalho (horas)</label><input type="number" step="0.5" id="cTempo" value="${o.tempoGastoHoras||""}"></div>
-      <div class="field"><label class="f">Tempo de parada do equipamento (horas)</label><input type="number" step="0.5" id="cParada" value="${o.paradaHoras||""}"></div>
+      <div class="field"><label class="f">Tempo de parada (horas) <span class="hint">calculado das datas acima; pode ajustar</span></label><input type="number" step="0.5" id="cParada" value="${o.paradaHoras||""}"></div>
       <div class="field"><label class="f">Data de início</label><input type="date" id="cIni" value="${o.dataInicio||todayStr()}"></div>
       <div class="field"><label class="f">Data de conclusão</label><input type="date" id="cFim" value="${o.dataConclusao||todayStr()}"></div>
     </div>
   `,[{label:"✅ Concluir OS",cls:"ok",fn:()=>{
       const serv=val("cServ");if(!serv){toast("Descreva o serviço executado.");return false;}
       o.servicoExecutado=serv;o.pecas=val("cPecas");
+      o.sintoma=val("cSint")||"";o.causa=val("cCausa")||"";o.intervencao=val("cInterv")||"";
+      o.paradaEm=val("cParou")||null;o.retornoEm=val("cVoltou")||null;
       o.tempoGastoHoras=parseFloat(val("cTempo"))||null;o.paradaHoras=parseFloat(val("cParada"))||null;
       o.dataInicio=val("cIni")||o.dataInicio;o.dataConclusao=val("cFim")||todayStr();o.status="concluida";
       addHist(o,"OS concluída");save();toast("✅ OS concluída!");render();return true;
     }},{label:"Salvar sem concluir",cls:"",fn:()=>{
-      o.servicoExecutado=val("cServ");o.pecas=val("cPecas");o.tempoGastoHoras=parseFloat(val("cTempo"))||null;o.paradaHoras=parseFloat(val("cParada"))||null;o.dataInicio=val("cIni")||o.dataInicio;
+      o.servicoExecutado=val("cServ");o.pecas=val("cPecas");
+      o.sintoma=val("cSint")||"";o.causa=val("cCausa")||"";o.intervencao=val("cInterv")||"";
+      o.paradaEm=val("cParou")||null;o.retornoEm=val("cVoltou")||null;
+      o.tempoGastoHoras=parseFloat(val("cTempo"))||null;o.paradaHoras=parseFloat(val("cParada"))||null;o.dataInicio=val("cIni")||o.dataInicio;
       save();toast("Progresso salvo.");return true;
     }}]);
 }
@@ -1101,10 +1223,12 @@ function imprimirOS(id){
   const o=ordemById(id);const e=equip(o.equipamentoId);const t=o.tecnicoId?tec(o.tecnicoId):null;
   document.getElementById("printArea").innerHTML=`<div class="sheet">
     <div class="sh"><div><img src="logo-rei.png" style="height:46px;display:block" onerror="this.style.display='none'"><h2 style="margin-top:6px">ORDEM DE SERVIÇO — MANUTENÇÃO</h2><div>Nº <b>${o.numero}</b></div></div>
-      <div style="text-align:right"><b>REI Auto Parts</b><br>Emissão: ${fmt(todayStr())}</div></div>
+      <div style="text-align:right"><b>REI Auto Parts</b><br>Emissão: ${fmt(todayStr())} às ${new Date().toTimeString().slice(0,5)}</div></div>
     <table><tr><th style="width:25%">Equipamento</th><td>${e.tag} · ${e.nome}</td><th style="width:15%">Setor</th><td>${o.setorSolicitante||e.setor}</td></tr>
       <tr><th>Categoria</th><td>${o.categoria?CATEGORIAS[o.categoria]:"________"}</td><th>Prioridade</th><td>${PRIORIDADES[o.prioridade]}</td></tr>
       <tr><th>Tipo</th><td>${TIPOS[o.tipo]}</td><th>Prazo</th><td>${o.prazo?fmt(o.prazo):"________"}</td></tr>
+      <tr><th>Sintoma</th><td>${o.sintoma?catLbl("sintomas",o.sintoma):"________"}</td><th>Causa</th><td>${o.causa?catLbl("causas",o.causa):"________"}</td></tr>
+      <tr><th>Intervenção</th><td>${o.intervencao?catLbl("intervencoes",o.intervencao):"________"}</td><th>Parada / Retorno</th><td>${o.paradaEm?fmtDT(o.paradaEm)+" → "+fmtDT(o.retornoEm):"____/____/____ __:__ → ____/____/____ __:__"}</td></tr>
       <tr><th>Solicitante</th><td>${o.solicitante||""}</td><th>Aberta em</th><td>${fmt(o.dataAbertura)}</td></tr>
       <tr><th>Responsável</th><td colspan="3">${t?t.nome+" — "+CATEGORIAS[t.equipe]:"________________________"}</td></tr></table>
     <p style="margin:10px 0 2px"><b>Problema reportado:</b></p><div class="blk" style="min-height:40px">${o.descricaoProblema}</div>
