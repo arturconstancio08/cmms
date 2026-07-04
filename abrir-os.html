@@ -222,7 +222,7 @@ function renderForm(){
       <label class="f">Equipamento <span class="req">*</span></label>
       <div class="eqrow">
         <input id="fEquipBusca" placeholder="Digite a TAG (nº), o código ou o nome (ex.: 0040, FF1.02, JATO...)" autocomplete="off">
-        <button type="button" class="btn-lupa" title="Pesquisar equipamento (como no Datasul)" onclick="abrirPesquisa()">🔍</button>
+        <button type="button" class="btn-lupa" title="Pesquisar equipamento" onclick="abrirPesquisa()">🔍</button>
       </div>
       <input type="hidden" id="fEquip">
       <div id="eqSugList" class="suglist" style="display:none"></div>
@@ -262,7 +262,7 @@ function baseEquipSetor(){
 function atualizaEqHint(){
   const st=document.getElementById("fSetor").value;
   const h=document.getElementById("eqHint");
-  if(h) h.textContent=baseEquipSetor().length+" equipamentos"+(st?" no setor "+st:" cadastrados")+" — digite para afunilar ou toque na lupa 🔍 para pesquisar por TAG (como no Datasul)";
+  if(h) h.textContent=baseEquipSetor().length+" equipamentos"+(st?" no setor "+st:" cadastrados")+" — digite para afunilar ou toque na lupa 🔍 para pesquisar por TAG ";
 }
 function onSetorChange(){
   clearError("fSetor");
