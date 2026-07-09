@@ -87,7 +87,7 @@
     <div id="formArea" class="body"></div>
     <div id="successArea" class="success" style="display:none"></div>
   </div>
-  <div class="foot">Portal de solicitação · v10.0 (base real TOTVS) · preencha os campos obrigatórios <span style="color:#dc2626">*</span></div>
+  <div class="foot">Portal de solicitação · v11.0 (base real TOTVS) · preencha os campos obrigatórios <span style="color:#dc2626">*</span></div>
 </div>
 
 <div id="eqModal" class="pesq-ovl" style="display:none" onclick="if(event.target===this)fecharPesquisa()">
@@ -104,12 +104,13 @@
 <script src="DB_REI_dados.js"></script>
 <script>
 /* ===== armazenamento partilhado com o programa de gestão (mesmo navegador) ===== */
-const LS_KEY="rei_cmms_v5_real"; // mesma chave do programa de gestão v5/v6
+const LS_KEY="rei_cmms_v5_real"; // mesma chave do programa de gestão
 const ATIVAS=["aberta","execucao","aguardando_peca"];
 let state=null, ORIG=new Map();
 
 function uid(){return Math.random().toString(36).slice(2,9);}
 function todayStr(){return new Date().toISOString().slice(0,10);}
+function nowLocalDT(){const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
 
 const GALPOES={FF1:"Fundição de Ferro (fase II)",FF2:"Fundição de Ferro (VICK)",FF3:"Fundição de Ferro (FBO X)",FA1:"Fundição de Aço (fase IV)",FAL1:"Fundição de Alumínio",FM1:"Fundição Manual e Alumínio (fase III)",US1:"Usinagem",US2:"Usinagem",AL1:"Almoxarifado",RE1:"Recepção",CM1:"Comercial",SG1:"Segurança",VEI:"Veículos"};
 function galpaoDoTag(tag){const p=(tag||"").split(".")[0];return GALPOES[p]||p||"";}
@@ -391,15 +392,16 @@ function enviar(){
     return;
   }
 
+  const abertaEm=nowLocalDT();
   const o={
     id:uid(), numero:nextNumero(), equipamentoId:eqp.value,
     solicitante:solic.value.trim(), setorSolicitante:setor.value.trim(),
     descricaoProblema:desc.value.trim(), tipo:document.getElementById("fTipo").value,
     prioridade:"media", categoria:null, status:"aberta", tecnicoId:null, prazo:null,
-    dataAbertura:todayStr(), dataInicio:null, dataConclusao:null,
+    dataAbertura:abertaEm.slice(0,10), dataAberturaHora:abertaEm, dataInicio:null, dataConclusao:null,
     servicoExecutado:"", pecas:"", tempoGastoHoras:null, paradaHoras:null,
     relacionadaA:relacionada, observacoesGestor:"",
-    historico:[{data:todayStr(),evento:"OS aberta pelo solicitante"+(relacionada?" (vinculada a OS existente)":""),usuario:solic.value.trim()}]
+    historico:[{data:abertaEm.slice(0,10),hora:abertaEm,evento:"OS aberta pelo solicitante"+(relacionada?" (vinculada a OS existente)":""),usuario:solic.value.trim()}]
   };
   state.ordens.push(o); save();
   mostrarSucesso(o);
@@ -414,8 +416,7 @@ function mostrarSucesso(o){
     <h2>Solicitação enviada!</h2>
     <div class="num">${o.numero}</div>
     <p><b>${e.tag}</b> · ${e.nome}<br>O gestor da manutenção vai conferir e direcionar para a equipa.</p>
-    <button class="btn primary" onclick="novaOutra()">➕ Abrir outra OS</button>
-    <button class="btn ghost" style="margin-top:10px" onclick="window.print()">🖨 Imprimir comprovativo</button>`;
+    <button class="btn primary" onclick="novaOutra()">➕ Abrir outra OS</button>`;
 }
 function novaOutra(){
   document.getElementById("successArea").style.display="none";

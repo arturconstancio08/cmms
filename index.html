@@ -208,7 +208,7 @@
   <aside id="sidebar">
     <div class="brand" id="brandBox"></div>
     <nav id="nav"></nav>
-    <div class="foot">REI Auto Parts · CMMS Manutenção<br>Programa de Gestão · v18.0 (dados reais TOTVS) · <span id="yr"></span></div>
+    <div class="foot">REI Auto Parts · CMMS Manutenção<br>Programa de Gestão · v20.0 (dados reais TOTVS) · <span id="yr"></span></div>
   </aside>
 
   <div id="main">
@@ -381,14 +381,25 @@ function ordemById(id){ return state.ordens.find(o=>o.id===id); }
 function isActive(o){ return ATIVAS.includes(o.status); }
 function isOverdue(o){ return o.prazo && isActive(o) && o.prazo < todayStr(); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
+function nowLocalDT(){ const d=new Date(),p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
 function fmt(dstr){ if(!dstr) return "—"; const p=dstr.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+function ordemAbertaEm(o){ return o.dataAberturaHora||o.abertaEm||o.dataAbertura||""; }
+function tsDate(v){ if(!v)return null; return new Date((v.includes("T")?v:v+"T00:00")); }
+function idadeAberta(o){
+  const d=tsDate(ordemAbertaEm(o)); if(!d||isNaN(d))return "—";
+  const min=Math.max(0,Math.floor((new Date()-d)/60000));
+  if(min<60)return `há ${min||1}min`;
+  const h=Math.floor(min/60); if(h<48)return `há ${h}h`;
+  const dias=Math.floor(h/24); return `há ${dias} dia${dias>1?"s":""}`;
+}
+function abertaResumo(o){ const v=ordemAbertaEm(o); return `<b>${idadeAberta(o)}</b><br><span class="hint">${v&&v.includes("T")?fmtDT(v):fmt(o.dataAbertura)}</span>`; }
 function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 function nextNumero(){ const num="OS-2026-"+String(state.proximoNumero).padStart(4,"0"); state.proximoNumero++; return num; }
 function catalogo(nome){ return (window.DB_REI&&window.DB_REI[nome])||[]; }
 function catOpts(nome,sel){ return `<option value="">— selecione —</option>`+catalogo(nome).map(x=>`<option value="${x[0]}"${sel===x[0]?" selected":""}>${x[0]} — ${x[1]}</option>`).join(""); }
 function catLbl(nome,cod){ if(!cod) return "—"; const it=catalogo(nome).find(x=>x[0]===cod); return it?(cod+" — "+it[1]):cod; }
 function fmtDT(v){ if(!v) return "—"; const [d,h]=v.split("T"); return fmt(d)+(h?" "+h.slice(0,5):""); }
-function addHist(o,evento,usuario){ o.historico.push({data:todayStr(),evento,usuario:usuario||"Gestor"}); }
+function addHist(o,evento,usuario){ o.historico.push({data:todayStr(),hora:nowLocalDT(),evento,usuario:usuario||"Gestor"}); }
 
 function statusTag(o){
   if(isOverdue(o)) return `<span class="tag t-late">⏰ Atrasada</span>`;
@@ -432,6 +443,7 @@ const NAV = [
   {id:"equipamentos",icon:"⚙️",label:"Equipamentos",roles:["gestor"]},
   {id:"tecnicos",icon:"👷",label:"Equipa Técnica",roles:["gestor"]},
   {grp:"Gestão"},
+  {id:"indicadores",icon:"⏱",label:"MTTR / MTBF",roles:["gestor"]},
   {id:"relatorios",icon:"📈",label:"Relatórios",roles:["gestor"]},
   {id:"config",icon:"💾",label:"Backup & Dados",roles:["gestor"]},
 ];
@@ -465,7 +477,7 @@ function toggleSidebar(){ document.getElementById("sidebar").classList.toggle("o
 function closeSidebar(){ document.getElementById("sidebar").classList.remove("open"); }
 
 /* ===================== RENDER PRINCIPAL ===================== */
-const TITLES={dashboard:"Painel de Manutenção",ordens:"Ordens de Serviço",nova:"Registar Ordem de Serviço",triagem:"Triagem de Solicitações",preventivas:"Planos de Preventiva",topareas:"Top 10 por Área Produtiva",equipamentos:"Equipamentos",tecnicos:"Equipa Técnica",relatorios:"Relatórios e Indicadores",config:"Backup & Dados"};
+const TITLES={dashboard:"Painel de Manutenção",ordens:"Ordens de Serviço",nova:"Registar Ordem de Serviço",triagem:"Triagem de Solicitações",preventivas:"Planos de Preventiva",topareas:"Top 10 por Área Produtiva",indicadores:"Indicadores MTTR / MTBF",equipamentos:"Equipamentos",tecnicos:"Equipa Técnica",relatorios:"Relatórios e Indicadores",config:"Backup & Dados"};
 
 function render(){
   const allowed=NAV.find(n=>n.id===currentView);
@@ -473,7 +485,7 @@ function render(){
   renderBrand(); renderUserBox(); buildNav();
   document.getElementById("pageTitle").textContent=TITLES[currentView]||"Painel";
   const c=document.getElementById("content");
-  ({dashboard:viewDashboard,ordens:viewOrdens,nova:viewNova,triagem:viewTriagem,preventivas:viewPreventivas,topareas:viewTopAreas,equipamentos:viewEquipamentos,tecnicos:viewTecnicos,relatorios:viewRelatorios,config:viewConfig}[currentView]||viewDashboard)(c);
+  ({dashboard:viewDashboard,ordens:viewOrdens,nova:viewNova,triagem:viewTriagem,preventivas:viewPreventivas,topareas:viewTopAreas,indicadores:viewIndicadores,equipamentos:viewEquipamentos,tecnicos:viewTecnicos,relatorios:viewRelatorios,config:viewConfig}[currentView]||viewDashboard)(c);
 }
 
 /* ===================== DASHBOARD ===================== */
@@ -508,8 +520,7 @@ function viewDashboard(c){
   const atrasadas=O.filter(isOverdue).length;
   const backlogOS=O.filter(o=>isActive(o)&&o.tipo!=="preventiva").length;
   const backlogPrev=O.filter(o=>isActive(o)&&o.tipo==="preventiva").length;
-  const comTempo=concl.filter(o=>o.dataInicio&&o.dataConclusao);
-  const mttr = comTempo.length? (comTempo.reduce((s,o)=>s+Math.max(daysBetween(o.dataInicio,o.dataConclusao),0)*24,0)/comTempo.length) : 0;
+  const indKpiDash = calcIndicadores(...indRangeFor(dashPeriodo)); // MTTR/MTBF reais (base MI0629 + OS concluídas c/ parada)
   const concComPrazo=concl.filter(o=>o.prazo&&o.dataConclusao);
   const noPrazo=concComPrazo.filter(o=>o.dataConclusao<=o.prazo).length;
   const taxaPrazo=concComPrazo.length? Math.round(noPrazo/concComPrazo.length*100):100;
@@ -535,7 +546,7 @@ function viewDashboard(c){
       <div class="kpi k-done" style="cursor:pointer" title="Ver OS concluídas" onclick="irParaOrdens('concluida')"><div class="bar"></div><div class="lbl">Concluídas ›</div><div class="val">${concl.length}</div><div class="sub">${periodoAtivo?"no período":"total histórico"}</div></div>
       <div class="kpi k-back" style="cursor:pointer" title="Corretivas, melhorias e preditivas ativas" onclick="irParaOrdens('ativas','naoprev')"><div class="bar"></div><div class="lbl">Backlog OS ›</div><div class="val">${backlogOS}</div><div class="sub">corretivas e outras ativas</div></div>
       <div class="kpi k-prev" style="cursor:pointer" title="Preventivas ativas (programa do mês)" onclick="irParaOrdens('ativas','preventiva')"><div class="bar"></div><div class="lbl">Backlog Prevent. ›</div><div class="val">${backlogPrev}</div><div class="sub">programa a cumprir</div></div>
-      <div class="kpi k-mttr"><div class="bar"></div><div class="lbl">MTTR médio</div><div class="val">${mttr.toFixed(1)}h</div><div class="sub">tempo médio de reparo</div></div>
+      <div class="kpi k-mttr" style="cursor:pointer" title="Abrir indicadores MTTR/MTBF por equipamento" onclick="currentView='indicadores';render()"><div class="bar"></div><div class="lbl">MTTR médio ›</div><div class="val">${indKpiDash?indH(indKpiDash.geral.mttr)+"h":"—"}</div><div class="sub">${indKpiDash?"MTBF "+indH(indKpiDash.geral.mtbf)+"h · clique p/ detalhe":"sem dados no período"}</div></div>
     </div>
     <div class="row" style="margin-bottom:16px">
       <div class="col card"><h3>Tendência ${dashPeriodo.ano?"("+dashPeriodo.ano+")":"(últimos 6 meses)"}: abertas vs concluídas</h3><canvas id="chTrend" height="120"></canvas></div>
@@ -612,16 +623,36 @@ const AREAS=[
   {id:"manual",nome:"Fundição Manual e Alumínio",icone:"🧱",prefixos:["FM1","FAL1"]},
   {id:"usinagem",nome:"Usinagem",icone:"⚙️",prefixos:["US1","US2","US3"]}
 ];
-let taPeriodo={ano:String(new Date().getFullYear()),mes:String(new Date().getMonth()+1).padStart(2,"0")};
+let taPeriodo={modo:"mes",ano:String(new Date().getFullYear()),mes:String(new Date().getMonth()+1).padStart(2,"0")};
 function taModo(){ const n=new Date(),a=String(n.getFullYear()),m=String(n.getMonth()+1).padStart(2,"0");
+  if(taPeriodo.modo) return taPeriodo.modo;
   if(taPeriodo.ano===a&&taPeriodo.mes===m) return "mes";
   if(taPeriodo.ano===a&&!taPeriodo.mes) return "ano";
   if(!taPeriodo.ano&&!taPeriodo.mes) return "geral";
   return ""; }
-function taMes(){ const n=new Date(); taPeriodo={ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
-function taAno(){ taPeriodo={ano:String(new Date().getFullYear()),mes:""}; render(); }
-function taGeral(){ taPeriodo={ano:"",mes:""}; render(); }
-function taFiltrar(){ taPeriodo={ano:val("taAno"),mes:val("taMes")}; render(); }
+function taMes(){ const n=new Date(); taPeriodo={modo:"mes",ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
+function ta3Meses(){ const n=new Date(); taPeriodo={modo:"3m",ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
+function taSemestre(){ const n=new Date(); taPeriodo={modo:"semestre",ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
+function taAno(){ taPeriodo={modo:"ano",ano:String(new Date().getFullYear()),mes:""}; render(); }
+function taGeral(){ taPeriodo={modo:"geral",ano:"",mes:""}; render(); }
+function taFiltrar(){ taPeriodo={modo:"",ano:val("taAno"),mes:val("taMes")}; render(); }
+function taRange(){
+  const n=new Date();
+  if(taPeriodo.modo==="3m"){ const fim=new Date(n.getFullYear(),n.getMonth()+1,0); const ini=new Date(n.getFullYear(),n.getMonth()-2,1); return {ini:ini.toISOString().slice(0,10),fim:fim.toISOString().slice(0,10),label:"últimos 3 meses"}; }
+  if(taPeriodo.modo==="semestre"){ const sem=n.getMonth()<6?1:2; const ini=new Date(n.getFullYear(),sem===1?0:6,1); const fim=new Date(n.getFullYear(),sem===1?6:12,0); return {ini:ini.toISOString().slice(0,10),fim:fim.toISOString().slice(0,10),label:(sem===1?"1º":"2º")+" semestre/"+n.getFullYear()}; }
+  if(taPeriodo.modo==="ano") return {ini:String(n.getFullYear())+"-01-01",fim:String(n.getFullYear())+"-12-31",label:"ano atual"};
+  if(taPeriodo.modo==="geral") return {ini:"",fim:"",label:"histórico completo"};
+  const label=taPeriodo.mes?MESES_LBL[+taPeriodo.mes-1]+"/"+taPeriodo.ano:(taPeriodo.ano||"histórico completo");
+  return {ini:"",fim:"",label};
+}
+function taDentroPeriodo(o){
+  const d=o.dataAbertura||"";
+  const r=taRange();
+  if(r.ini||r.fim) return (!r.ini||d>=r.ini)&&(!r.fim||d<=r.fim);
+  if(taPeriodo.ano&&d.slice(0,4)!==taPeriodo.ano) return false;
+  if(taPeriodo.mes&&d.slice(5,7)!==taPeriodo.mes) return false;
+  return true;
+}
 function prefixoDaOrdem(o){
   const e=equip(o.equipamentoId);
   return ((e.tag||"").split(".")[0]||"").toUpperCase();
@@ -629,11 +660,10 @@ function prefixoDaOrdem(o){
 function viewTopAreas(c){
   destroyCharts();
   const anos=[...new Set(state.ordens.map(o=>(o.dataAbertura||"").slice(0,4)).filter(Boolean))].sort();
+  const periodoTA=taRange();
   const O=state.ordens.filter(o=>{
     if(o.tipo==="preventiva") return false; // preventivas geradas em lote não entram no ranking
-    if(taPeriodo.ano&&(o.dataAbertura||"").slice(0,4)!==taPeriodo.ano) return false;
-    if(taPeriodo.mes&&(o.dataAbertura||"").slice(5,7)!==taPeriodo.mes) return false;
-    return true;
+    return taDentroPeriodo(o);
   });
   const porArea={}; AREAS.forEach(a=>porArea[a.id]={total:0,cont:{}});
   O.forEach(o=>{
@@ -642,7 +672,6 @@ function viewTopAreas(c){
     const g=porArea[area.id]; g.total++;
     if(o.equipamentoId) g.cont[o.equipamentoId]=(g.cont[o.equipamentoId]||0)+1;
   });
-  const mesLbl=taPeriodo.mes?MESES_LBL[+taPeriodo.mes-1]+"/"+taPeriodo.ano:(taPeriodo.ano||"histórico completo");
   c.innerHTML=`
     <div class="card" style="margin-bottom:14px;padding:12px 14px">
       <div class="filters">
@@ -650,10 +679,12 @@ function viewTopAreas(c){
         <div class="field"><label class="f">Mês</label><select id="taMes" onchange="taFiltrar()"><option value="">Todos</option>${MESES_LBL.map((m,i)=>{const v=String(i+1).padStart(2,"0");return `<option value="${v}"${taPeriodo.mes===v?" selected":""}>${m}</option>`;}).join("")}</select></div>
         <div style="display:flex;gap:6px;align-items:flex-end">
           <button class="btn sm ${taModo()==="mes"?"primary":""}" onclick="taMes()">Mês atual</button>
+          <button class="btn sm ${taModo()==="3m"?"primary":""}" onclick="ta3Meses()">3 meses</button>
+          <button class="btn sm ${taModo()==="semestre"?"primary":""}" onclick="taSemestre()">Semestre</button>
           <button class="btn sm ${taModo()==="ano"?"primary":""}" onclick="taAno()">Ano atual</button>
           <button class="btn sm ${taModo()==="geral"?"primary":""}" onclick="taGeral()">Geral</button>
         </div>
-        <span class="hint" style="align-self:center">Top 10 equipamentos com mais OS <b>(exceto preventivas)</b> — ${mesLbl}. Clique na barra para abrir as OS.</span>
+        <span class="hint" style="align-self:center">Top 10 equipamentos com mais OS <b>(exceto preventivas)</b> — ${periodoTA.label}. Clique na barra para abrir as OS.</span>
       </div>
     </div>
     <div class="row" style="flex-wrap:wrap">
@@ -673,6 +704,190 @@ function viewTopAreas(c){
         plugins:{legend:{display:false},tooltip:{callbacks:{title:(it)=>{const t=top[it[0].dataIndex];return t.tag+" — "+t.nomeEq;},afterLabel:()=>"🔎 clique para ver as OS"}}},
         scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
   });
+}
+
+
+/* ===================== INDICADORES MTTR / MTBF ===================== */
+/* Baseline importado do Datasul MI0629 (exportado 07/07/2026, seleção 01/01–30/07/2026, tipo 100=corretiva).
+   Derivado por equipamento: [código, nº falhas, horas paradas]. Fórmulas (padrão MI0629, turno "não considera" = 24h/dia):
+   MTTR = horas paradas ÷ falhas · MTBF = (horas do período − horas paradas) ÷ falhas · Disp = (T − paradas) ÷ T */
+const MTBF_BASE = {"de":"2026-01-01","ate":"2026-07-30","itens":[["CM1.01.ILUM01",1,0.0],["FA1.01",2,0.5],["FA1.01.MIST01",14,21.28],["FA1.01.PELE04",1,0.42],["FA1.01.PLAT01",1,0.66],["FA1.01.PLAT02",1,0.25],["FA1.01.PLAT04",1,0.33],["FA1.01.ROLE03",1,0.67],["FA1.01.ROLL01",7,14.0],["FA1.01.SILO01",1,1.0],["FA1.01.UNHD01",1,0.33],["FA1.01.UNHD02",2,18.0],["FA1.02.MANI01",3,4.26],["FA1.02.PELE01",9,5.31],["FA1.02.PINT01",4,1.68],["FA1.03.MANI01",11,11.55],["FA1.03.PELE01",1,0.17],["FA1.03.PELE02",1,0.5],["FA1.03.PTRL01",2,4.76],["FA1.04",1,0.33],["FA1.04.FNIN01",4,1.32],["FA1.04.FNIN02",5,5.35],["FA1.04.KBK01",3,5.01],["FA1.04.MONO01",6,9.78],["FA1.04.PELE03",3,2.91],["FA1.04.TALH07",7,4.97],["FA1.04.TEMP03",2,1.42],["FA1.05",1,0.0],["FA1.05.CARE01",4,2.08],["FA1.05.CARH01",6,13.68],["FA1.05.CARH02",3,1.5],["FA1.05.PTRL01",1,0.25],["FA1.05.PTRL02",6,27.54],["FA1.06",5,3.59],["FA1.06.CALH01",14,10.92],["FA1.06.CARE01",1,0.17],["FA1.06.DESM01",9,80.55],["FA1.06.EMPR01",1,0.25],["FA1.06.EXST01",1,1.5],["FA1.06.EXST02",2,3.5],["FA1.06.JATO01",36,34.56],["FA1.06.MANI01",11,142.78],["FA1.06.PELE01",6,6.06],["FA1.06.PELE02",1,0.34],["FA1.06.PELE07",2,0.5],["FA1.06.RESF01",1,1.83],["FA1.06.ROLE01",1,0.67],["FA1.06.ROLE02",6,4.44],["FA1.06.ROLE03",1,0.34],["FA1.06.VSPL01",11,15.51],["FA1.07.PELE01",3,1.17],["FA1.07.PELE02",8,4.32],["FA1.07.PELE04",1,7.0],["FA1.07.SILO02",1,1.5],["FA1.07.TORR02",1,0.5],["FA1.07.VSPL03",2,0.76],["FA1.08",2,0.5],["FA1.08.BRGR02",13,16.77],["FA1.08.ESMA08",1,0.67],["FA1.08.ESMC03",1,1.0],["FA1.08.ESMC04",1,0.67],["FA1.08.ESMP01",4,3.84],["FA1.08.EXST01",2,3.0],["FA1.08.INVER03",1,0.42],["FA1.08.INVER04",1,1.0],["FA1.08.JATO01",14,68.74],["FA1.08.JATO02",22,189.64],["FA1.08.LIXA01",1,0.5],["FA1.08.MACA01",1,0.34],["FA1.08.MACA02",1,0.0],["FA1.08.PELE02",12,12.36],["FA1.08.PELE03",1,0.5],["FA1.08.RETI02",1,1.83],["FA1.08.RETI09",1,2.0],["FA1.08.RETI10",1,1.67],["FA1.08.ULTR01",2,2.0],["FA1.09.ESMA01",1,0.33],["FA1.09.SERR01",2,0.84],["FA1.12.TPPN01",1,1.5],["FA1.13.CPRE01",1,1.0],["FA1.13.CPRE04",2,0.66],["FA1.13.RSAR02",1,0.83],["FA1.15.BRGR01",1,1.0],["FA1.15.DETC01",9,6.75],["FA1.15.JATO02",11,16.72],["FA1.15.LAPC02",1,1.0],["FA1.16.FNTT02",2,1.18],["FA1.16.FNTT03",1,29.0],["FA1.16.FNTT04",2,4.5],["FA1.16.FNTT05",2,4.0],["FA1.16.PELE01",3,3.0],["FA1.16.PELE04",1,2.5],["FA1.16.PELE05",1,0.34],["FA1.16.TALH01",7,4.76],["FAL1.01.EXAU01",1,0.25],["FAL1.01.INJ01",3,11.43],["FAL1.01.INJ02",1,5.0],["FAL1.01.PELE01",1,0.42],["FAL1.04.TEMP02",1,0.25],["FF1.01.AREJ01",3,0.66],["FF1.01.DOSD01",1,0.5],["FF1.01.FBOO01",12,7.08],["FF1.01.MIST01",4,244.52],["FF1.01.PELE01",2,1.34],["FF1.01.TPCO03",1,0.5],["FF1.02",8,4.64],["FF1.02.PELE01",6,3.36],["FF1.02.PELE03",7,5.18],["FF1.02.PELE05",1,0.33],["FF1.02.PELE07",27,12.96],["FF1.02.PELE08",7,3.36],["FF1.02.SOPR01",33,29.37],["FF1.02.SOPR04",40,31.2],["FF1.02.SOPR05",10,11.8],["FF1.02.SOPR06",5,2.6],["FF1.02.SOPR07",5,8.65],["FF1.03.FNIN01",2,0.76],["FF1.03.LIXA01",1,1.0],["FF1.03.TALH01",4,1.92],["FF1.03.TEMP06",9,7.02],["FF1.04",1,0.34],["FF1.04.AQUE01",9,5.85],["FF1.04.AQUE02",10,5.1],["FF1.04.AQUE03",14,11.2],["FF1.04.AQUE04",2,1.0],["FF1.04.AQUE05",5,1.75],["FF1.04.ELEV03",1,5.0],["FF1.04.EMPU02",1,1.08],["FF1.04.EMPU03",1,0.67],["FF1.04.EMPU04",1,1.0],["FF1.05",3,3.34],["FF1.05.BASC02",1,0.5],["FF1.05.ELEV02",2,3.18],["FF1.05.EXAU01",2,2.5],["FF1.05.EXAU02",2,5.0],["FF1.05.GUIL01",3,4.83],["FF1.05.JATO01",6,15.48],["FF1.05.MOED01",3,6.42],["FF1.05.PELE01",7,2.94],["FF1.05.PELE02",1,1.0],["FF1.05.PENE01",1,0.42],["FF1.05.RESF01",3,6.24],["FF1.05.TPRO01",2,0.6],["FF1.05.TPRO02",14,6.58],["FF1.08.TELE01",1,2.0],["FF1.14",1,0.0],["FF1.18",3,3.66],["FF2.01",1,0.5],["FF2.01.ABRI",10,6.1],["FF2.01.AREJ01",14,12.46],["FF2.01.FECH01",28,17.92],["FF2.01.FRES01",1,0.33],["FF2.01.MIST02",3,4.59],["FF2.01.PELE01",9,3.78],["FF2.01.PELE07",2,1.32],["FF2.01.VICK",31,34.41],["FF2.02",23,16.56],["FF2.02.CAFE01",20,17.42],["FF2.02.FRPE01",1,1.0],["FF2.02.LINH04",4,1.24],["FF2.02.PELE01",35,11.2],["FF2.02.PELE02",17,9.69],["FF2.02.PTRL02",12,4.8],["FF2.02.TALH03",4,2.68],["FF2.02.TRFE01",1,0.33],["FF2.02.UNHD02",1,0.25],["FF2.03",4,1.32],["FF2.03.BRGR02",34,18.7],["FF2.03.ELEV01",6,3.66],["FF2.03.ELEV02",22,26.62],["FF2.03.EMPU01",1,6.0],["FF2.03.EXAU01",2,14.0],["FF2.03.GUIL01",9,17.19],["FF2.03.JATO01",10,4.8],["FF2.03.MUNK02",6,5.1],["FF2.03.PELE01",6,3.66],["FF2.03.PELE03",1,0.34],["FF2.03.PELE04",1,1.25],["FF2.03.PELE07",3,0.84],["FF2.03.POLI01",1,0.0],["FF2.03.TALH01",1,1.0],["FF2.03.TPCO01",2,1.08],["FF2.03.TRAN02",6,8.1],["FF2.04",3,1.08],["FF2.06.BALN01",1,0.33],["FF2.06.EIMA01",1,0.33],["FF2.06.EXAU01",1,1.0],["FF2.06.FNIN01",21,34.02],["FF2.06.PELE02",1,0.16],["FF2.06.PTRL 02",5,11.9],["FF2.06.TEMP01",8,6.48],["FF2.06.TEMP04",5,3.9],["FF3.01",1,1.75],["FF3.01.AREJ01",2,0.84],["FF3.01.FBOO01",14,13.3],["FF3.01.TORR01",1,0.0],["FF3.02",1,0.0],["FF3.02.AQUE02",1,1.0],["FF3.02.AQUE03",29,14.79],["FF3.02.ELEV03",3,1.17],["FF3.02.ELEV04",2,1.5],["FF3.02.EMPU01",4,0.68],["FF3.02.EMPU02",4,2.0],["FF3.02.EMPU03",16,4.0],["FF3.02.EMPU04",3,1.5],["FF3.02.GANG02",2,2.84],["FF3.02.GANG03",4,4.68],["FF3.02.GANG04",2,4.0],["FF3.02.LEVP01",2,0.5],["FF3.02.LEVP02",1,4.0],["FF3.02.LEVP04",2,0.76],["FF3.02.LEVP08",1,1.5],["FF3.02.TALH01",12,16.32],["FF3.02.TALH02",9,15.03],["FF3.03.BASC02",5,4.4],["FF3.03.BASC03",5,1.6],["FF3.03.BASC04",7,2.73],["FF3.03.DESM01",9,9.63],["FF3.03.EXAU01",1,2.0],["FF3.03.JATO01",78,121.68],["FF3.03.PELE02",13,5.59],["FF3.04",1,2.0],["FM1.01.MIST01",80,43.2],["FM1.01.SILO03",3,9.0],["FM1.01.TPPN01",3,3.57],["FM1.02",1,0.25],["FM1.02.FORN01",1,0.33],["FM1.02.TEMP02",1,0.5],["FM1.03.DESM01",3,8.01],["FM1.03.PELE01",1,0.33],["FM1.04",3,1.26],["FM1.04.ESMC05",3,2.58],["FM1.04.ESMC07",1,0.66],["FM1.04.ESMC08",3,1.83],["FM1.04.ESMC10",1,0.5],["FM1.04.ESMC12",19,11.02],["FM1.04.ESMP03",1,0.17],["FM1.04.EXAU04",4,20.68],["FM1.04.FURA01",3,1.92],["FM1.04.JATO01",16,20.48],["FM1.04.LIXA02",1,9.0],["FM1.04.MQRB01",5,4.85],["FM1.04.MQRB02",1,0.5],["FM1.05.FNAL01",2,2.34],["FM1.06.BALA01",1,1.5],["FM1.06.FNTT01",1,0.83],["FM1.06.FNTT06",6,10.26],["FM1.06.FNTT07",11,16.92],["FM1.06.FNTT08",1,1.33],["FM1.06.PELE04",2,0.34],["FM1.06.PELE05",2,1.84],["FM1.06.PELE07",3,0.9],["FM1.06.PELE08",1,2.5],["FM1.06.TALH03",1,0.67],["FM1.06.TALH06",2,1.26],["FM1.10",1,2.0],["FM1.12",3,2.67],["FM1.12.COQU03",1,339.0],["FM1.12.COQU04",3,1.74],["FM1.12.COQU06",1,7.0],["FM1.12.COQU07",1,0.17],["US1.01.CTOR01",2,4.0],["US1.01.CTOR02",6,11.76],["US1.01.CTOR03",7,23.03],["US1.01.CTOR04",2,4.0],["US1.01.CTOR05",3,10.5],["US1.01.CTOR06",1,10.0],["US1.01.CTOR07",3,5.01],["US1.01.CTOR08",4,8.0],["US1.01.CTOR09",6,34.68],["US1.01.CTOR11",4,294.0],["US1.01.CTOR12",6,19.98],["US1.01.CTOR14",5,17.5],["US1.01.CTOR15",2,9.0],["US1.01.CTOR16",2,7.0],["US1.01.CTOR17",2,0.5],["US1.01.SERR01",1,3.0],["US1.01.SERR02",1,1.0],["US1.01.SERR03",3,198.99],["US1.01.TALH03",1,3.0],["US1.01.TORN01",1,5.0],["US1.02",6,22.5],["US1.02.CUSH02",9,16.47],["US1.02.CUSH03",14,41.02],["US1.02.CUSH04",19,154.47],["US1.02.CUSH05",9,15.48],["US1.02.CUSH06",15,40.05],["US1.02.CUSH07",13,55.51],["US1.02.CUSH08",12,51.48],["US1.02.CUSH09",6,19.5],["US1.02.CUSV01",5,5.85],["US1.02.TALH01",2,7.0],["US1.03.GERE01",3,9.51],["US1.03.GERE02",4,3.84],["US1.03.GERE03",4,5.52],["US1.03.GERE04",4,3.51],["US1.04",1,5.0],["US1.04.BRCH01",3,8.49],["US1.04.BRCH02",3,32.01],["US1.04.BRCV01",4,8.0],["US1.04.BRCV02",15,154.8],["US1.04.BRCV03",8,25.04],["US1.04.BRCV04",1,3.0],["US1.04.ELET01",5,11.5],["US1.04.ELET02",7,25.97],["US1.05.BALC01",1,1.0],["US1.05.FRFR03",2,4.0],["US1.05.FRFR04",1,3.0],["US1.05.GRVA01",5,9.5],["US1.05.GRVA02",1,2.0],["US1.06.TORN01",2,10.5],["US1.07.MAQF01",1,1.0],["US1.14.BOLH01",1,3.0],["US1.14.LAPC01",1,1.5],["US1.14.LAPC02",1,1.0],["US1.21",1,1.0],["US1.21.PREN01",1,2.0],["US1.23.INDU03",1,0.0],["US1.23.POLI01",11,30.03],["US1.23.PREN02",1,1.0],["VE1.01.EMPI01",1,0.0],["VE1.01.EMPI06",1,0.33],["VE1.01.EMPI07",1,2.5]],"extras":[["USINAGEM",3,12.99],["ALMOXARIFADO",1,0.0],["Visão: 02 Tag não definido(a)!",4,11.0]],"efetivoAte":"2026-07-07"};
+const IND_EXTRA_AREA = {"USINAGEM":"usinagem"}; // extras sem cadastro; restantes só contam no Geral
+let indPeriodo = {ano:String(new Date().getFullYear()),mes:""}; // abre no ano atual
+let indArea = ""; let indSort = {col:"falhas",dir:-1}; let indBusca = "";
+
+function indModo(){ const n=new Date(),a=String(n.getFullYear()),m=String(n.getMonth()+1).padStart(2,"0");
+  if(indPeriodo.ano===a&&indPeriodo.mes===m) return "mes";
+  if(indPeriodo.ano===a&&!indPeriodo.mes) return "ano";
+  if(!indPeriodo.ano&&!indPeriodo.mes) return "geral";
+  return ""; }
+function indMes(){ const n=new Date(); indPeriodo={ano:String(n.getFullYear()),mes:String(n.getMonth()+1).padStart(2,"0")}; render(); }
+function indAno(){ indPeriodo={ano:String(new Date().getFullYear()),mes:""}; render(); }
+function indGeral(){ indPeriodo={ano:"",mes:""}; render(); }
+function indFiltrar(){ indPeriodo={ano:val("iAno"),mes:val("iMes")}; render(); }
+function indSetArea(a){ indArea=(indArea===a)?"":a; render(); }
+function indSortBy(c){ if(indSort.col===c) indSort.dir=-indSort.dir; else indSort={col:c,dir:-1}; render(); }
+function indBuscaLive(){ indBusca=val("iBusca").toLowerCase(); const el=document.getElementById("indTabela"); if(el) el.innerHTML=indTabelaHTML(); }
+
+function indRangeSel(){ return indRangeFor(indPeriodo); }
+function indRangeFor(p){
+  const hoje=todayStr();
+  if(p.ano&&p.mes){
+    const a=+p.ano,m=+p.mes;
+    const fim=new Date(a,m,0).getDate();
+    return [p.ano+"-"+p.mes+"-01", p.ano+"-"+p.mes+"-"+String(fim).padStart(2,"0")];
+  }
+  if(p.ano) return [p.ano+"-01-01", p.ano+"-12-31"];
+  return [MTBF_BASE.de, hoje];
+}
+function indDiasIncl(a,b){ return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/86400000)+1; }
+function indOverlapDias(a1,a2,b1,b2){ const i=a1>b1?a1:b1, f=a2<b2?a2:b2; return f>=i? indDiasIncl(i,f) : 0; }
+
+function indAreaDoCod(cod){
+  const pref=((cod||"").split(".")[0]||"").toUpperCase().trim();
+  const ar=AREAS.find(a=>a.prefixos.includes(pref));
+  return ar?ar.id:"outros";
+}
+
+function calcIndicadores(de,ate){
+  const hoje=todayStr();
+  const ini = de>MTBF_BASE.de ? de : MTBF_BASE.de;      // indicadores começam em 2026-01-01
+  const fim = ate<hoje ? ate : hoje;                     // não conta dias futuros
+  if(ini>fim) return null;
+  const T=indDiasIncl(ini,fim)*24;
+  const baseDias=indDiasIncl(MTBF_BASE.de,MTBF_BASE.efetivoAte);
+  const frac=indOverlapDias(ini,fim,MTBF_BASE.de,MTBF_BASE.efetivoAte)/baseDias;
+  const map=new Map();
+  const add=(key,id,cod,nome,areaId,f,d)=>{
+    let r=map.get(key); if(!r){ r={id,cod,nome,areaId,falhas:0,down:0}; map.set(key,r); }
+    r.falhas+=f; r.down+=d;
+  };
+  if(frac>0){
+    MTBF_BASE.itens.forEach(it=>{
+      const cod=it[0], id="q_"+cod, e=equip(id);
+      add(id,id,cod,e.nome||cod,indAreaDoCod(cod),it[1]*frac,it[2]*frac);
+    });
+    MTBF_BASE.extras.forEach((ex,i)=>{
+      add("extra:"+i,null,ex[0],"(sem cadastro no Datasul)",IND_EXTRA_AREA[ex[0]]||"outros",ex[1]*frac,ex[2]*frac);
+    });
+  }
+  // OS corretivas concluídas neste CMMS com tempo de parada, após o corte do baseline — evita dupla contagem com o Datasul
+  state.ordens.forEach(o=>{
+    if(o.db||o.tipo!=="corretiva"||o.status!=="concluida") return;
+    const dc=o.dataConclusao||""; if(!dc) return;
+    if(dc<=MTBF_BASE.efetivoAte) return;
+    if(dc<ini||dc>fim) return;
+    const ph=+o.paradaHoras||0; if(ph<=0) return;
+    const e=equip(o.equipamentoId);
+    add(o.equipamentoId||"x",o.equipamentoId,e.tag||"—",e.nome||"—",indAreaDoCod(e.tag),1,ph);
+  });
+  const linhas=[...map.values()].filter(r=>r.falhas>0).map(r=>{
+    r.mttr=r.down/r.falhas;
+    r.mtbf=(T-r.down)/r.falhas;
+    r.disp=T>0?(T-r.down)/T*100:0;
+    return r;
+  });
+  const agg=list=>{
+    if(!list.length) return {nEq:0,falhas:0,down:0,mtbf:0,mttr:0,disp:0};
+    return {nEq:list.length,
+      falhas:list.reduce((s,r)=>s+r.falhas,0),
+      down:list.reduce((s,r)=>s+r.down,0),
+      mtbf:list.reduce((s,r)=>s+r.mtbf,0)/list.length,   // média simples, como a linha de topo do MI0629
+      mttr:list.reduce((s,r)=>s+r.mttr,0)/list.length,
+      disp:list.reduce((s,r)=>s+r.disp,0)/list.length};
+  };
+  const areas={}; AREAS.forEach(a=>areas[a.id]=agg(linhas.filter(r=>r.areaId===a.id)));
+  areas.outros=agg(linhas.filter(r=>r.areaId==="outros"));
+  return {T,ini,fim,frac,estimado:frac>0&&frac<0.999,linhas,areas,geral:agg(linhas)};
+}
+
+function indH(v){ if(v==null||isNaN(v)) return "—"; return v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:v<10?2:(v<100?1:0)}); }
+function indF(v){ const r=Math.round(v); return Math.abs(v-r)<0.01? String(r) : v.toLocaleString("pt-BR",{maximumFractionDigits:1}); }
+
+let INDC=null;
+function indTabelaHTML(){
+  if(!INDC) return "";
+  let rows=INDC.linhas.filter(r=>!indArea||r.areaId===indArea);
+  if(indBusca) rows=rows.filter(r=>((r.cod||"")+" "+(r.nome||"")).toLowerCase().includes(indBusca));
+  const dir=indSort.dir, col=indSort.col;
+  rows.sort((a,b)=>{ const x=a[col],y=b[col]; return (typeof x==="string"? x.localeCompare(y) : x-y)*dir; });
+  const arr=c=>indSort.col===c?(indSort.dir<0?" ▼":" ▲"):"";
+  const areaLbl=id=>{ const a=AREAS.find(x=>x.id===id); return a?a.icone:"·"; };
+  return `<div class="table-wrap"><table><thead><tr>
+      <th style="cursor:pointer" onclick="indSortBy('cod')">Equipamento${arr("cod")}</th>
+      <th></th>
+      <th style="cursor:pointer;text-align:right" onclick="indSortBy('falhas')">Falhas${arr("falhas")}</th>
+      <th style="cursor:pointer;text-align:right" onclick="indSortBy('down')">Paradas (h)${arr("down")}</th>
+      <th style="cursor:pointer;text-align:right" onclick="indSortBy('mtbf')">MTBF (h)${arr("mtbf")}</th>
+      <th style="cursor:pointer;text-align:right" onclick="indSortBy('mttr')">MTTR (h)${arr("mttr")}</th>
+      <th style="cursor:pointer;text-align:right" onclick="indSortBy('disp')">Disp.${arr("disp")}</th>
+    </tr></thead><tbody>
+    ${rows.map(r=>`<tr ${r.id?`style="cursor:pointer" onclick="irParaOrdensEquip('${r.id}')" title="Ver OS do equipamento"`:""}>
+      <td><b>${r.cod}</b><br><span class="hint">${r.nome}</span></td>
+      <td title="${(AREAS.find(a=>a.id===r.areaId)||{}).nome||"Outros"}">${areaLbl(r.areaId)}</td>
+      <td style="text-align:right"><b>${indF(r.falhas)}</b></td>
+      <td style="text-align:right">${indH(r.down)}</td>
+      <td style="text-align:right">${indH(r.mtbf)}</td>
+      <td style="text-align:right">${indH(r.mttr)}</td>
+      <td style="text-align:right;color:${r.disp>=99?"var(--ok)":(r.disp>=95?"#d97706":"#dc2626")}"><b>${r.disp.toFixed(1)}%</b></td>
+    </tr>`).join("")}
+    </tbody></table></div>
+    <div class="hint" style="margin-top:6px">${rows.length} equipamento(s)${indArea?" na área selecionada":""}. Clique no cabeçalho para ordenar, na linha para abrir as OS.</div>`;
+}
+function indExportCSV(){
+  if(!INDC) return;
+  let rows=INDC.linhas.filter(r=>!indArea||r.areaId===indArea);
+  const esc=s=>'"'+String(s==null?"":s).replace(/"/g,'""')+'"';
+  const num=v=>String(Math.round(v*100)/100).replace(".",",");
+  const csv=["Equipamento;Descrição;Área;Falhas;Horas Paradas;MTBF (h);MTTR (h);Disponibilidade (%)"]
+    .concat(rows.map(r=>[esc(r.cod),esc(r.nome),esc((AREAS.find(a=>a.id===r.areaId)||{}).nome||"Outros"),num(r.falhas),num(r.down),num(r.mtbf),num(r.mttr),num(r.disp)].join(";"))).join("\r\n");
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="mttr_mtbf_"+(indPeriodo.ano||"geral")+(indPeriodo.mes?"-"+indPeriodo.mes:"")+".csv"; a.click();
+}
+
+function viewIndicadores(c){
+  destroyCharts();
+  const anos=[]; for(let a=2026;a<=new Date().getFullYear();a++) anos.push(String(a));
+  INDC=calcIndicadores(...indRangeSel());
+  const cardArea=(id,nome,icone,g)=>`
+    <div class="kpi ${indArea===id?"k-exec":"k-done"}" style="cursor:pointer;min-width:180px${indArea===id?";outline:2px solid #0e7490":""}" onclick="indSetArea('${id}')" title="Filtrar tabela por ${nome}">
+      <div class="bar"></div><div class="lbl">${icone} ${nome} ›</div>
+      <div class="val" style="font-size:22px">${g.nEq?indH(g.mtbf)+"h":"—"}</div>
+      <div class="sub">MTBF · MTTR ${g.nEq?indH(g.mttr)+"h":"—"} · disp. ${g.nEq?g.disp.toFixed(1)+"%":"—"}<br>${indF(g.falhas)} falhas · ${indH(g.down)}h paradas · ${g.nEq} equip.</div>
+    </div>`;
+  c.innerHTML=`
+    <div class="card" style="margin-bottom:14px;padding:12px 14px">
+      <div class="filters">
+        <div class="field"><label class="f">Ano</label><select id="iAno" onchange="indFiltrar()"><option value="">Todos</option>${anos.map(a=>`<option value="${a}"${indPeriodo.ano===a?" selected":""}>${a}</option>`).join("")}</select></div>
+        <div class="field"><label class="f">Mês</label><select id="iMes" onchange="indFiltrar()"><option value="">Todos</option>${MESES_LBL.map((m,i)=>{const v=String(i+1).padStart(2,"0");return `<option value="${v}"${indPeriodo.mes===v?" selected":""}>${m}</option>`;}).join("")}</select></div>
+        <div style="display:flex;gap:6px;align-items:flex-end">
+          <button class="btn sm ${indModo()==="mes"?"primary":""}" onclick="indMes()">Mês atual</button>
+          <button class="btn sm ${indModo()==="ano"?"primary":""}" onclick="indAno()">Ano atual</button>
+          <button class="btn sm ${indModo()==="geral"?"primary":""}" onclick="indGeral()">Geral</button>
+        </div>
+        ${INDC?`<span class="hint" style="align-self:center">Período <b>${fmt(INDC.ini)} → ${fmt(INDC.fim)}</b> · ${indH(INDC.T)}h de calendário (24h/dia, turno não considerado — igual ao MI0629)${INDC.estimado?` · <span class="tag t-aguardando_peca" title="O bloco Datasul (01/01–07/07/2026) foi rateado proporcionalmente aos dias do período selecionado">rateio estimado</span>`:""}</span>`:""}
+      </div>
+    </div>
+    ${!INDC?`<div class="empty"><div class="big">📭</div>Sem dados para este período.<br><span class="hint">Os indicadores começam em Janeiro de 2026 (base Datasul MI0629). Para trás não há registo de horas paradas.</span></div>`:`
+    <div class="grid kpis" style="margin-bottom:14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+      <div class="kpi k-mttr"><div class="bar"></div><div class="lbl">🏭 Geral da Fábrica</div>
+        <div class="val" style="font-size:22px">${INDC.geral.nEq?indH(INDC.geral.mtbf)+"h":"—"}</div>
+        <div class="sub">MTBF médio · MTTR ${indH(INDC.geral.mttr)}h · disp. ${INDC.geral.disp.toFixed(1)}%<br>${indF(INDC.geral.falhas)} falhas · ${indH(INDC.geral.down)}h paradas · ${INDC.geral.nEq} equip.</div>
+      </div>
+      ${AREAS.map(a=>cardArea(a.id,a.nome,a.icone,INDC.areas[a.id])).join("")}
+      ${INDC.areas.outros.nEq?cardArea("outros","Outros / Apoio","📦",INDC.areas.outros):""}
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <h3 style="margin:0">Indicadores por equipamento ${indArea?`<span class="hint" style="font-weight:400">— ${(AREAS.find(a=>a.id===indArea)||{nome:"Outros / Apoio"}).nome} <a href="javascript:indSetArea('${indArea}')" style="font-size:12px">(limpar)</a></span>`:""}</h3>
+        <div class="field" style="min-width:220px;margin-left:auto"><input id="iBusca" placeholder="Buscar código ou nome..." value="${indBusca}" oninput="indBuscaLive()"></div>
+        <button class="btn sm" onclick="indExportCSV()" title="Exporta a tabela como CSV (abre no Excel)">⬇ CSV</button>
+      </div>
+      <div id="indTabela"></div>
+      <div class="hint" style="margin-top:8px">Fontes: base Datasul MI0629 (corretivas, 01/01–07/07/2026: 1.754 falhas / 3.954h paradas) + OS corretivas concluídas neste CMMS com tempo de parada após 07/07/2026. Fórmulas idênticas ao MI0629: MTTR = paradas ÷ falhas · MTBF = (calendário − paradas) ÷ falhas · Disponibilidade = MTBF ÷ (MTBF + MTTR). Médias das áreas = média simples dos equipamentos com falha (como a linha de topo do Datasul).</div>
+    </div>`}`;
+  const el=document.getElementById("indTabela"); if(el) el.innerHTML=indTabelaHTML();
 }
 
 /* ===================== LISTA DE ORDENS ===================== */
@@ -788,25 +1003,41 @@ function renderOrdensTable(){
 /* ===================== REGISTAR OS (INTERNO/GESTOR) + ALERTA DUPLICADOS ===================== */
 function viewNova(c){
   destroyCharts();
+  const setores=[...new Set(state.equipamentos.map(e=>e.setor).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   c.innerHTML=`
   <div class="row">
     <div class="col card" style="max-width:640px">
       <h3>➕ Registar Ordem de Serviço (uso interno)</h3>
       <p class="hint" style="margin-top:0">Para solicitações de operadores, use o <b>Portal de Abertura de OS</b> (ficheiro separado). Este formulário serve para o gestor registar um chamado recebido por telefone/rádio.</p>
-      <div class="field" style="position:relative"><label class="f">Equipamento * <span class="hint">(${state.equipamentos.length} cadastrados — digite para buscar)</span></label>
-        <input id="nEquipBusca" placeholder="Digite TAG, descrição, setor ou família..." autocomplete="off" oninput="eqSugestoes()" onfocus="eqSugestoes()">
+      <div class="form-grid">
+        <div class="field"><label class="f">Solicitante *</label><input id="nSolic" placeholder="Quem solicitou"></div>
+        <div class="field"><label class="f">Setor / Local *</label><select id="nSetor" onchange="nSetorChange()"><option value="">— selecione o setor —</option>${setores.map(x=>`<option value="${x}">${x}</option>`).join("")}</select><div class="hint">Ao escolher o equipamento, o setor é preenchido automaticamente.</div></div>
+      </div>
+      <div class="field" style="position:relative"><label class="f">Equipamento * <span class="hint" id="nEqHint"></span></label>
+        <div style="display:flex;gap:8px">
+          <input id="nEquipBusca" placeholder="Digite a TAG (nº), o código ou o nome (ex.: 0040, FF1.02, JATO...)" autocomplete="off" oninput="nEqSugestoes()" onfocus="nEqSugestoes()">
+          <button type="button" class="btn" title="Pesquisar equipamento" onclick="nAbrirPesquisa()">🔍</button>
+        </div>
         <input type="hidden" id="nEquip">
         <div id="eqSugList" class="suglist" style="display:none"></div>
       </div>
       <div id="dupAlert"></div>
-      <div class="field"><label class="f">Descrição do problema *</label><textarea id="nDesc" placeholder="Descreva o que está acontecendo, sintomas, quando começou..."></textarea></div>
-      <div class="form-grid">
-        <div class="field"><label class="f">Tipo de manutenção</label><select id="nTipo">${Object.keys(TIPOS).map(t=>`<option value="${t}">${TIPOS[t]}</option>`).join("")}</select></div>
-        <div class="field"><label class="f">Solicitante *</label><input id="nSolic" placeholder="Quem solicitou"></div>
-      </div>
+      <div class="field"><label class="f">Tipo de manutenção</label><select id="nTipo"><option value="corretiva">Corretiva (quebra / falha)</option><option value="preventiva">Preventiva (revisão / inspeção)</option><option value="melhoria">Melhoria (adaptação / instalação / upgrade)</option></select></div>
+      <div class="field"><label class="f">Descrição do problema *</label><textarea id="nDesc" placeholder="O que está acontecendo? Sintomas, ruídos, quando começou, se parou o equipamento..."></textarea></div>
       <div class="hint">A categoria (mecânica/elétrica), prioridade e o técnico responsável são definidos na triagem.</div>
       <div style="margin-top:16px;display:flex;gap:10px">
         <button class="btn primary" id="btnCriar" onclick="criarOrdem()">Registar Ordem de Serviço</button>
+      </div>
+      <div id="nEqModal" class="pesq-ovl" style="display:none" onclick="if(event.target===this)nFecharPesquisa()">
+        <div class="pesq">
+          <div class="pesq-h"><b>Pesquisa Equipamento</b><button class="pesq-x" onclick="nFecharPesquisa()">×</button></div>
+          <div class="pesq-bar">
+            <input id="nPesqQ" placeholder="Digite a TAG (nº), o equipamento ou a descrição..." oninput="nPesqRender()" autocomplete="off">
+            <select id="nPesqOrd" onchange="nPesqRender()"><option value="tagN">Ordenar por: TAG</option><option value="tag">Ordenar por: Equipamento</option><option value="nome">Ordenar por: Descrição</option></select>
+          </div>
+          <div class="pesq-body"><table class="pesq-t"><thead><tr><th>TAG</th><th>Equipamento</th><th>Descrição</th><th>Setor</th><th>Família</th></tr></thead><tbody id="nPesqRows"></tbody></table></div>
+          <div class="pesq-f"><span id="nPesqInfo" class="hint" style="margin:0"></span></div>
+        </div>
       </div>
     </div>
     <div class="col card" style="max-width:380px;align-self:flex-start">
@@ -815,15 +1046,52 @@ function viewNova(c){
       <p style="font-size:13.5px;color:#475569;line-height:1.6">Pode então <b>ver a OS existente</b>, ou registar mesmo assim (com justificação, vinculando à ordem original).</p>
     </div>
   </div>`;
+  nAtualizaEqHint();
 }
-function eqSugestoes(){
+function nBaseEquipSetor(){
+  const st=val("nSetor");
+  return st?state.equipamentos.filter(e=>e.setor===st):state.equipamentos;
+}
+function nAtualizaEqHint(){
+  const h=document.getElementById("nEqHint"); if(!h)return;
+  const st=val("nSetor");
+  h.textContent=`(${nBaseEquipSetor().length} equipamentos${st?" no setor "+st:" cadastrados"})`;
+}
+function nSetorChange(){
+  const st=val("nSetor"),eid=val("nEquip");
+  if(eid&&st&&equip(eid).setor!==st){document.getElementById("nEquip").value="";document.getElementById("nEquipBusca").value="";document.getElementById("dupAlert").innerHTML="";}
+  nAtualizaEqHint();
+  const busca=document.getElementById("nEquipBusca"); if(busca&&busca.value.trim().length>=2)nEqSugestoes();
+}
+function nAbrirPesquisa(){
+  document.getElementById("eqSugList").style.display="none";
+  document.getElementById("nEqModal").style.display="flex";
+  const q=document.getElementById("nPesqQ"),atual=document.getElementById("nEquipBusca").value;
+  q.value=atual.includes("·")?"":atual.trim(); nPesqRender(); q.focus();
+}
+function nFecharPesquisa(){document.getElementById("nEqModal").style.display="none";}
+function nPesqRender(){
+  const q=(document.getElementById("nPesqQ").value||"").trim().toLowerCase(),ord=document.getElementById("nPesqOrd").value;
+  let list=q?nBaseEquipSetor().filter(e=>((e.tagN||"")+" "+(e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")).toLowerCase().includes(q)):nBaseEquipSetor().slice();
+  const soNum=/^\d+$/.test(q),qn=soNum?String(parseInt(q,10)):"";
+  const ehPref=e=>soNum?(!!e.tagN&&(e.tagN.replace(/^0+/,"")).indexOf(qn)===0):((e.tag||"").toLowerCase().indexOf(q)===0);
+  const cmp=(a,b)=>{ if(ord==="tagN"){const x=a.tagN?parseInt(a.tagN,10):1e9,y=b.tagN?parseInt(b.tagN,10):1e9;return x-y||(a.tag||"").localeCompare(b.tag||"");} const key=(ord==="nome")?"nome":"tag";return (a[key]||"").localeCompare(b[key]||""); };
+  const pref=q?list.filter(ehPref):[],rest=q?list.filter(e=>!ehPref(e)):list,exato=e=>soNum&&!!e.tagN&&e.tagN.replace(/^0+/,"")===qn;
+  pref.sort((a,b)=>((exato(a)?0:1)-(exato(b)?0:1))||cmp(a,b)); rest.sort(cmp); list=pref.concat(rest);
+  const MAX=150;
+  document.getElementById("nPesqRows").innerHTML=list.slice(0,MAX).map(e=>`<tr onclick="nPesqEscolher('${e.id}')"><td style="white-space:nowrap"><b>${e.tagN||"—"}</b></td><td style="white-space:nowrap">${e.tag}</td><td>${e.nome}</td><td>${e.setor||"—"}</td><td>${e.familiaNome||e.familia||"—"}</td></tr>`).join("")||`<tr><td colspan="5" style="color:var(--muted);padding:18px">Nenhum equipamento encontrado — confira a TAG na etiqueta da máquina.</td></tr>`;
+  const st=val("nSetor");
+  document.getElementById("nPesqInfo").textContent=list.length+" equipamento(s)"+(st?" no setor "+st:"")+(list.length>MAX?" — mostrando os primeiros "+MAX+", refine a busca":"");
+}
+function nPesqEscolher(id){nFecharPesquisa();eqEscolher(id);}
+function nEqSugestoes(){
   const inp=document.getElementById("nEquipBusca"),box=document.getElementById("eqSugList");
   const q=inp.value.trim().toLowerCase();
   document.getElementById("nEquip").value="";document.getElementById("dupAlert").innerHTML="";
-  if(q.length<2){box.style.display="none";box.innerHTML="";return;}
-  const res=state.equipamentos.filter(e=>((e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")).toLowerCase().includes(q)).slice(0,30);
-  if(!res.length){box.innerHTML=`<div class="sugitem" style="cursor:default;color:var(--muted)">Nenhum equipamento encontrado.</div>`;box.style.display="block";return;}
-  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tag}</b> · ${e.nome}<br><span class="hint">${e.setor||"—"} · ${e.familia||"—"}</span></div>`).join("");
+  const base=nBaseEquipSetor(); if(q.length<2&&!val("nSetor")){box.style.display="none";box.innerHTML="";return;}
+  const res=(q.length<2?base.slice().sort((a,b)=>(a.tag||"").localeCompare(b.tag||"")):base.filter(e=>((e.tagN||"")+" "+(e.tag||"")+" "+(e.nome||"")+" "+(e.setor||"")+" "+(e.familia||"")+" "+(e.familiaNome||"")).toLowerCase().includes(q))).slice(0,30);
+  if(!res.length){box.innerHTML=`<div class="sugitem" style="cursor:default;color:var(--muted)">Nenhum equipamento encontrado — confira a TAG na etiqueta da máquina.</div>`;box.style.display="block";return;}
+  box.innerHTML=res.map(e=>`<div class="sugitem" onclick="eqEscolher('${e.id}')"><b>${e.tagN?"TAG "+e.tagN+" · ":""}${e.tag}</b> · ${e.nome}<br><span class="hint" style="margin:0">${e.setor||"—"} · ${e.familiaNome||e.familia||"—"}</span></div>`).join("");
   box.style.display="block";
 }
 function eqEscolher(id){
@@ -831,6 +1099,7 @@ function eqEscolher(id){
   document.getElementById("nEquip").value=id;
   document.getElementById("nEquipBusca").value=e.tag+" · "+e.nome;
   document.getElementById("eqSugList").style.display="none";
+  if(e.setor){document.getElementById("nSetor").value=e.setor;nAtualizaEqHint();}
   checarDuplicada();
 }
 function ordensAtivasDoEquip(eid){ return state.ordens.filter(o=>o.equipamentoId===eid && isActive(o)); }
@@ -856,22 +1125,25 @@ function criarOrdem(){
   const eid=document.getElementById("nEquip").value;
   const desc=document.getElementById("nDesc").value.trim();
   const solic=document.getElementById("nSolic").value.trim();
-  if(!eid||!desc||!solic){toast("Preencha equipamento, problema e solicitante.");return;}
+  const setor=val("nSetor");
+  if(!eid||!desc||!solic||!setor){toast("Preencha solicitante, setor, equipamento e problema.");return;}
   const ativas=ordensAtivasDoEquip(eid);
   let relacionada=null;
   if(ativas.length){
     const force=document.getElementById("nForce");
     if(!force||!force.checked){toast("⚠️ Já existe OS ativa. Confirme que é um problema diferente para prosseguir.");return;}
+    const just=val("nJustText"); if(!just){toast("Explique por que é uma nova OS.");return;}
     relacionada=ativas[0].id;
   }
+  const abertaEm=nowLocalDT();
   const o={
-    id:uid(), numero:nextNumero(), equipamentoId:eid, solicitante:solic,
+    id:uid(), numero:nextNumero(), equipamentoId:eid, solicitante:solic, setorSolicitante:setor,
     descricaoProblema:desc, tipo:document.getElementById("nTipo").value, prioridade:"media",
     categoria:null, status:"aberta", tecnicoId:null, prazo:null,
-    dataAbertura:todayStr(), dataInicio:null, dataConclusao:null,
+    dataAbertura:abertaEm.slice(0,10), dataAberturaHora:abertaEm, dataInicio:null, dataConclusao:null,
     servicoExecutado:"", pecas:"", tempoGastoHoras:null, paradaHoras:null,
     relacionadaA:relacionada, observacoesGestor:"",
-    historico:[{data:todayStr(),evento:"OS registada pelo gestor"+(relacionada?" (vinculada a OS ativa existente)":""),usuario:solic}]
+    historico:[{data:abertaEm.slice(0,10),hora:abertaEm,evento:"OS registada pelo gestor"+(relacionada?" (vinculada a OS ativa existente)":""),usuario:solic}]
   };
   state.ordens.push(o); save();
   toast("✅ "+o.numero+" registada com sucesso!");
@@ -881,14 +1153,15 @@ function criarOrdem(){
 /* ===================== TRIAGEM ===================== */
 function viewTriagem(c){
   destroyCharts();
-  const fila=state.ordens.filter(o=>o.status==="aberta").sort((a,b)=>{const pr={urgente:0,alta:1,media:2,baixa:3};return pr[a.prioridade]-pr[b.prioridade]||a.dataAbertura.localeCompare(b.dataAbertura);});
+  const fila=state.ordens.filter(o=>o.status==="aberta").sort((a,b)=>{const pr={urgente:0,alta:1,media:2,baixa:3};return (pr[a.prioridade]??2)-(pr[b.prioridade]??2)||ordemAbertaEm(a).localeCompare(ordemAbertaEm(b));});
   c.innerHTML=`<div class="card"><h3>🔎 Solicitações aguardando triagem (${fila.length})</h3>
     ${fila.length?`<div class="hint" style="margin-bottom:12px">Confira cada solicitação, defina categoria, prioridade, prazo e atribua a um técnico.</div>
-    <div class="table-wrap"><table><thead><tr><th>OS</th><th>Equipamento</th><th>Problema</th><th>Prioridade</th><th>Aberta</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>OS</th><th>Equipamento</th><th>Problema</th><th>Setor</th><th>Prioridade</th><th>Aberta</th><th></th></tr></thead><tbody>
     ${fila.map(o=>`<tr><td><b>${o.numero}</b>${o.relacionadaA?` <span class="tag t-late" title="Vinculada a OS existente">🔗</span>`:""}</td>
       <td>${equip(o.equipamentoId).tag}<br><span class="hint">${equip(o.equipamentoId).nome}</span></td>
       <td style="max-width:280px">${o.descricaoProblema}</td>
-      <td>${prioTag(o.prioridade)}</td><td>${fmt(o.dataAbertura)}</td>
+      <td>${o.setorSolicitante||equip(o.equipamentoId).setor||"—"}</td>
+      <td>${prioTag(o.prioridade)}</td><td>${abertaResumo(o)}</td>
       <td><button class="btn primary sm" onclick="openOrdem('${o.id}')">Triar →</button></td></tr>`).join("")}
     </tbody></table></div>`:`<div class="empty"><div class="big">🎉</div>Nenhuma solicitação na fila. Tudo triado!</div>`}
   </div>`;
@@ -1551,12 +1824,13 @@ function openOrdem(id){
       <div><div class="dl">Equipamento</div><div class="dv">${e.tag} · ${e.nome}</div></div>
       <div><div class="dl">Setor</div><div class="dv">${o.setorSolicitante||e.setor}</div></div>
       <div><div class="dl">Solicitante</div><div class="dv">${o.solicitante||"—"}</div></div>
-      <div><div class="dl">Aberta em</div><div class="dv">${fmt(o.dataAbertura)}</div></div>
+      <div><div class="dl">Aberta em</div><div class="dv">${fmtDT(ordemAbertaEm(o))}</div></div>
       <div><div class="dl">Responsável</div><div class="dv">${o.tecnicoId?tec(o.tecnicoId).nome+" ("+CATEGORIAS[tec(o.tecnicoId).equipe]+")":"—"}</div></div>
       <div><div class="dl">Prazo</div><div class="dv">${o.prazo?fmt(o.prazo)+(isOverdue(o)?' <span class="tag t-late">atrasada</span>':''):"—"}</div></div>
     </div>
     <div class="field" style="margin-top:14px"><div class="dl">Problema reportado</div><div style="background:var(--panel2);border-radius:8px;padding:10px;margin-top:4px">${o.descricaoProblema}</div></div>
     ${o.observacoesGestor?`<div class="field"><div class="dl">Observações do gestor</div><div style="background:#fffbeb;border-radius:8px;padding:10px;margin-top:4px">${o.observacoesGestor}</div></div>`:""}
+    ${o.status==="cancelada"&&(o.cancelamento||o.motivoCancelamento)?`<div class="field"><div class="dl">Justificativa do cancelamento</div><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px;margin-top:4px"><b>${o.cancelamento?fmtDT(o.cancelamento.hora||o.cancelamento.data):"—"} · ${(o.cancelamento&&o.cancelamento.usuario)||"Gestor"}</b><br>${(o.cancelamento&&o.cancelamento.motivo)||o.motivoCancelamento}</div></div>`:""}
     ${o.servicoExecutado?`<div class="field"><div class="dl">Serviço executado</div><div style="background:#f0fdf4;border-radius:8px;padding:10px;margin-top:4px">${o.servicoExecutado}<br><span class="hint">Peças: ${o.pecas||"—"} · Tempo: ${o.tempoGastoHoras||"—"}h · Parada: ${o.paradaHoras||"—"}h${o.paradaEm?` (${fmtDT(o.paradaEm)} → ${fmtDT(o.retornoEm)})`:""}</span></div></div>`:""}
     ${(o.sintoma||o.causa||o.intervencao)?`<div class="detail-grid" style="margin-top:10px">
       <div><div class="dl">Sintoma</div><div class="dv" style="font-size:13px">${catLbl("sintomas",o.sintoma)}</div></div>
@@ -1564,7 +1838,7 @@ function openOrdem(id){
       <div><div class="dl">Intervenção</div><div class="dv" style="font-size:13px">${catLbl("intervencoes",o.intervencao)}</div></div>
     </div>`:""}
     ${o.tarefas&&o.tarefas.length?`<div class="field"><div class="dl">Tarefas do plano ${o.planoCodigo||""}</div><div style="background:var(--panel2);border-radius:8px;padding:10px;margin-top:4px">${o.tarefas.map(tf=>`<div style="padding:2px 0">☐ <b>${tf.cod}</b> — ${tf.desc}${tf.obrig?' <span class="tag p-alta">obrigatória</span>':""}${tf.tempo?` <span class="hint">(${tf.tempo}h)</span>`:""}</div>`).join("")}</div></div>`:""}
-    <div class="field"><div class="dl">Histórico</div><ul class="timeline" style="margin-top:8px">${o.historico.map(h=>`<li><div>${h.evento}</div><div class="tmeta">${fmt(h.data)} · ${h.usuario}</div></li>`).join("")}</ul></div>
+    <div class="field"><div class="dl">Histórico</div><ul class="timeline" style="margin-top:8px">${o.historico.map(h=>`<li><div>${h.evento}</div><div class="tmeta">${h.hora?fmtDT(h.hora):fmt(h.data)} · ${h.usuario}</div></li>`).join("")}</ul></div>
   `;
   const acoes=[];
   acoes.push({label:"🖨 Imprimir folha",cls:"",fn:()=>{imprimirOS(o.id);return false;}});
@@ -1573,8 +1847,25 @@ function openOrdem(id){
   if(o.status==="execucao") acoes.push({label:"⏸ Aguardando peça",cls:"warn",fn:()=>{o.status="aguardando_peca";addHist(o,"Aguardando peça");save();render();return true;}});
   if(o.status==="aguardando_peca") acoes.push({label:"▶ Retomar execução",cls:"",fn:()=>{o.status="execucao";addHist(o,"Execução retomada");save();render();return true;}});
   if(o.status==="execucao"||o.status==="aguardando_peca") acoes.push({label:"✅ Concluir / preencher",cls:"ok",fn:()=>{concluirModal(o.id);return false;}});
-  if(isActive(o)) acoes.push({label:"Cancelar OS",cls:"bad",fn:()=>{if(confirm("Cancelar esta OS?")){o.status="cancelada";addHist(o,"OS cancelada pelo gestor");save();toast("OS cancelada.");render();return true;}return false;}});
+  if(isActive(o)) acoes.push({label:"Cancelar OS",cls:"bad",fn:()=>{cancelarModal(o.id);return false;}});
   openModal(o.numero+" — Ordem de Serviço",body,acoes,"wide");
+}
+
+function cancelarModal(id){
+  const o=ordemById(id); if(!o)return;
+  openModal("Cancelar OS — "+o.numero,`
+    <div class="alert dup" style="margin-bottom:14px"><div class="ai">⚠️</div><div><b>Cancelamento exige evidência.</b><br>Por requisito de auditoria/ISO 9001, informe claramente por que esta OS não deve seguir.</div></div>
+    <div class="field"><label class="f">Motivo / justificativa do cancelamento *</label><textarea id="canMotivo" placeholder="Ex.: solicitação duplicada da OS X; equipamento informado incorreto; serviço não é manutenção; aberto por engano..."></textarea></div>
+  `,[{label:"Confirmar cancelamento",cls:"bad",fn:()=>{
+      const motivo=val("canMotivo");
+      if(motivo.length<10){toast("Informe uma justificativa com evidência suficiente.");return false;}
+      const hora=nowLocalDT();
+      o.status="cancelada";
+      o.cancelamento={motivo,usuario:"Gestor",data:hora.slice(0,10),hora};
+      o.motivoCancelamento=motivo;
+      addHist(o,"OS cancelada pelo gestor — motivo: "+motivo,"Gestor");
+      save();toast("OS cancelada com justificativa.");render();return true;
+    }}]);
 }
 
 function triarModal(id){
@@ -1661,7 +1952,7 @@ function sheetHTML(o){
       <tr><th>Tipo</th><td>${TIPOS[o.tipo]}</td><th>Prazo</th><td>${o.prazo?fmt(o.prazo):"________"}</td></tr>
       <tr><th>Sintoma</th><td>${o.sintoma?catLbl("sintomas",o.sintoma):"________"}</td><th>Causa</th><td>${o.causa?catLbl("causas",o.causa):"________"}</td></tr>
       <tr><th>Intervenção</th><td>${o.intervencao?catLbl("intervencoes",o.intervencao):"________"}</td><th>Parada / Retorno</th><td>${o.paradaEm?fmtDT(o.paradaEm)+" → "+fmtDT(o.retornoEm):"____/____/____ __:__ → ____/____/____ __:__"}</td></tr>
-      <tr><th>Solicitante</th><td>${o.solicitante||""}</td><th>Aberta em</th><td>${fmt(o.dataAbertura)}</td></tr>
+      <tr><th>Solicitante</th><td>${o.solicitante||""}</td><th>Aberta em</th><td>${fmtDT(ordemAbertaEm(o))}</td></tr>
       <tr><th>Responsável</th><td colspan="3">${t?t.nome+" — "+CATEGORIAS[t.equipe]:"________________________"}</td></tr></table>
     <p style="margin:10px 0 2px"><b>${o.tipo==="preventiva"?"Serviço programado":"Problema reportado"}:</b></p><div class="blk" style="min-height:40px">${o.descricaoProblema}</div>
     ${o.observacoesGestor?`<p style="margin:10px 0 2px"><b>${o.planoCodigo?"Narrativa do plano":"Observações do gestor"}:</b></p><div class="blk" style="min-height:30px">${o.observacoesGestor}</div>`:""}
